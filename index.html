@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Smart Dash Studio — Transforme informações em decisões</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="#" id="brand" aria-label="Smart Dash Studio — início">
+    <svg viewBox="0 0 32 32" width="28" height="28" aria-hidden="true"><rect width="32" height="32" rx="9" fill="var(--brand)"/><rect x="7" y="16" width="4" height="9" rx="1.5" fill="#fff"/><rect x="14" y="10" width="4" height="15" rx="1.5" fill="#fff"/><rect x="21" y="13" width="4" height="12" rx="1.5" fill="#fff" opacity=".7"/></svg>
+    <span>Smart Dash Studio</span>
+  </a>
+  <div class="top-actions">
+    <button class="btn ghost" id="btnNew" hidden>Nova análise</button>
+    <button class="btn ghost" id="btnPanel" hidden>Personalizar</button>
+  </div>
+</header>
+
+<main>
+  <section id="viewHome" class="home">
+    <h1>Transforme informações em decisões.</h1>
+    <p class="sub">Insira seus dados, descreva o que deseja analisar e transforme informações em dashboards inteligentes.</p>
+    <div class="composer" id="composer">
+      <textarea id="prompt" rows="6" aria-label="Dados e instruções" placeholder="Cole uma tabela do Excel, CSV ou JSON, ou descreva a análise desejada. Ex.: Crie um dashboard executivo com os resultados mensais."></textarea>
+      <div class="files" id="fileList"></div>
+      <div class="composer-bar">
+        <label class="btn ghost attach" for="fileInput"><span id="clipIc"></span> Anexar arquivo</label>
+        <input type="file" id="fileInput" multiple accept=".xlsx,.xls,.csv,.tsv,.txt,.json" hidden>
+        <button class="link" id="btnSample" type="button">Inserir tabela de exemplo</button>
+        <span class="spacer"></span>
+        <button class="btn primary" id="btnGenerate">Gerar dashboards</button>
+      </div>
+      <p class="hint" id="hint" role="alert" hidden></p>
+    </div>
+    <div class="chips" id="suggestions" aria-label="Sugestões de análise"></div>
+    <div id="historyBox" class="history" hidden><h2>Histórico da sessão</h2><div class="chips" id="history"></div></div>
+    <p class="foot">Interpretação local por regras. Seus dados são processados no navegador e não são enviados a nenhum servidor.</p>
+  </section>
+
+  <section id="viewResults" class="results" hidden>
+    <div class="res-top">
+      <nav class="tabs" id="tabs" role="tablist"></nav>
+      <div class="res-actions">
+        <button class="btn ghost" id="btnCopyDash">Copiar dashboard</button>
+        <div class="menu">
+          <button class="btn ghost" id="btnExport" aria-haspopup="true">Exportar</button>
+          <div class="menu-list" id="exportMenu" hidden>
+            <button data-exp="png">Dashboard em PNG</button>
+            <button data-exp="pdf">Dashboard em PDF</button>
+            <button data-exp="csv">Dados processados (CSV)</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div id="banner" class="banner" hidden></div>
+    <div id="filters" class="filters"></div>
+    <div id="builder" class="builder" hidden></div>
+    <div id="capture" class="capture">
+      <div class="cap-head"><h2 id="capTitle"></h2><p id="capSub" class="muted"></p></div>
+      <div id="board" class="board"></div>
+    </div>
+    <div id="insightsView" hidden></div>
+    <div class="dock">
+      <div class="chatlog" id="chatlog" aria-live="polite"></div>
+      <form class="chatform" id="chatForm" autocomplete="off">
+        <input id="cmd" type="text" placeholder='Peça ajustes: "Mude todos os gráficos para tons de azul", "Mostre apenas outubro"…' aria-label="Comando">
+        <button class="btn primary round" type="submit" aria-label="Enviar comando"><span id="sendIc"></span></button>
+      </form>
+    </div>
+  </section>
+</main>
+
+<aside id="panel" class="panel" aria-label="Personalização" hidden>
+  <div class="panel-h"><h2>Personalizar</h2><button class="ib" id="panelClose" aria-label="Fechar">✕</button></div>
+  <div class="panel-b">
+    <section><h3>Cor principal</h3>
+      <div class="row"><input type="color" id="pPrimary" aria-label="Cor principal"><input type="text" id="pPrimaryHex" maxlength="7" aria-label="Código da cor"></div>
+      <div class="swatches" id="pPresets"></div></section>
+    <section><h3>Aparência</h3>
+      <div class="seg" id="pTheme"><button data-v="light">Claro</button><button data-v="dark">Escuro</button></div>
+      <div class="row mt"><label for="pBg">Fundo</label><input type="color" id="pBg"><button class="link" id="pBgReset">padrão</button></div></section>
+    <section><h3>Gráficos</h3>
+      <label class="check"><input type="checkbox" id="pLegend"> Exibir legendas</label>
+      <label class="fld">Formato dos gráficos
+        <select id="pFormat"><option value="auto">Automático (por dado)</option><option value="bar">Barras</option><option value="hbar">Barras horizontais</option><option value="line">Linhas</option><option value="area">Área</option><option value="doughnut">Rosca</option><option value="pie">Pizza</option></select></label>
+      <label class="fld">Tamanho dos cards
+        <select id="pSize"><option value="compact">Compacto</option><option value="normal">Normal</option><option value="large">Grande</option></select></label></section>
+    <section><h3>Título do dashboard</h3><input type="text" id="pTitle" maxlength="80" aria-label="Título do dashboard"></section>
+    <section><h3>Visualizações</h3><p class="muted small">Renomeie, escolha a cor e reordene.</p><div id="pWidgets"></div></section>
+    <button class="btn ghost wide" id="pReset">Restaurar tema original</button>
+  </div>
+</aside>
+
+<dialog id="dlg"></dialog>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+<div id="loading" class="loading" hidden><div class="spin"></div><p id="loadingMsg">Processando…</p></div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="data-parser.js"></script>
+<script src="dashboard-engine.js"></script>
+<script src="insights-engine.js"></script>
+<script src="export-utils.js"></script>
+<script src="render.js"></script>
+<script src="commands.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
