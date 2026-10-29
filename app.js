@@ -3,9 +3,9 @@
   'use strict';
   const $ = (s, r = document) => r.querySelector(s), $$ = (s, r = document) => [...r.querySelectorAll(s)];
   const esc = SDRender.esc, ICON = SDRender.ICON, E = SDEngine;
-  const TABS = [['executive', 'Executivo'], ['operational', 'Operacional'], ['analytical', 'Analítico'], ['custom', 'Personalizado'], ['insights', 'Insights & Melhorias']];
-  const DEF_TITLES = { executive: 'Dashboard Executivo', operational: 'Dashboard Operacional', analytical: 'Dashboard Analítico', custom: 'Dashboard Personalizado' };
-  const KEY = 'sds.prefs.v1';
+  const TABS = [['executive', 'Executivo'], ['operational', 'Operacional'], ['analytical', 'Analítico'], ['custom', 'Personalizado'], ['analysis', 'Análise'], ['insights', 'Insights & Melhorias']];
+  const DEF_TITLES = { executive: 'Dashboard Executivo', operational: 'Dashboard Operacional', analytical: 'Dashboard Analítico', custom: 'Dashboard Personalizado', analysis: 'Dashboard da Análise' };
+  const KEY = 'sds.prefs.v1', LKEY = 'sds.layout.v1', BRAND = '#C2185B';
   const SUGGEST = ['Analise a produtividade da equipe e apresente os principais indicadores.', 'Crie um dashboard executivo com os resultados mensais.', 'Compare o desempenho dos colaboradores.', 'Identifique gargalos operacionais.', 'Mostre a evolução dos projetos e os principais riscos.'];
   const emptyF = () => ({ dims: {}, from: '', to: '', months: [], years: [] });
   const defPrefs = () => { const m = E.PRESETS[0]; return { primary: m.primary, palette: [...m.palette], preset: 'Magenta', bg: null, theme: 'light', legend: true, cardSize: 'normal', chartFormat: 'auto', titles: {} }; };
@@ -25,7 +25,7 @@
     return d;
   }
   const savePrefs = () => { try { localStorage.setItem(KEY, JSON.stringify(S.prefs)); } catch (e) { /* ignora */ } };
-  const S = { ds: null, orig: null, modified: false, instruction: '', profile: null, dash: null, tab: 'executive', filters: emptyF(), insights: null, files: [], history: [], chat: [], prefs: loadPrefs(), dismissed: false };
+  const S = { ds: null, orig: null, modified: false, instruction: '', profile: null, dash: null, view: 'home', analysisTitle: '', tab: 'executive', filters: emptyF(), insights: null, files: [], history: [], chat: [], prefs: loadPrefs(), dismissed: false };
 
   /* ---------- utilidades de UI ---------- */
   let tt;
@@ -45,7 +45,7 @@
   function applyTheme() {
     const P = S.prefs, r = document.documentElement, dark = P.theme === 'dark';
     r.dataset.theme = P.theme;
-    r.style.setProperty('--brand', P.primary); r.style.setProperty('--brand-deep', E.withL(P.primary, -.12)); r.style.setProperty('--brand-soft', E.soft(P.primary, dark));
+    r.style.setProperty('--brand', BRAND); r.style.setProperty('--brand-deep', '#880E4F'); r.style.setProperty('--brand-soft', E.soft(BRAND, dark)); r.style.setProperty('--viz', P.palette[0]);
     if (P.bg) r.style.setProperty('--bg', P.bg); else r.style.removeProperty('--bg');
     $('#board').dataset.size = P.cardSize;
   }
@@ -92,10 +92,11 @@
     try {
       const notes = [], list = []; let instr = '';
       if (text) { const r = SDParser.parseText(text); if (r.ds) list.push(r.ds); instr = r.instruction; notes.push(...r.notes); }
-      for (const f of S.files) { const r = await SDParser.parseFile(f); if (r.ds) list.push(r.ds); if (r.instruction) instr += ' ' + r.instruction; notes.push(...r.notes); }
+      for (const f of S.files) { setLoading(true, `Lendo ${f.name} (${(f.size / 1048576).toFixed(1)} MB)… arquivos grandes podem levar alguns instantes.`); await tick(); const r = await SDParser.parseFileAsync(f); if (r.ds) list.push(r.ds); if (r.instruction) instr += ' ' + r.instruction; notes.push(...r.notes); }
+      setLoading(true, 'Analisando colunas e gerando dashboards…'); await tick();
       const ds = SDParser.combine(list, notes);
       if (!ds) { setLoading(false); return showHint('Não encontrei dados tabulares. Cole uma tabela (com cabeçalho), CSV, JSON ou anexe uma planilha — a instrução sozinha não gera dashboards.'); }
-      S.ds = ds; S.orig = { ...ds, rows: ds.rows.map(r => ({ ...r })), columns: ds.columns.map(c => ({ ...c })) }; S.modified = false;
+      S.ds = ds; S.orig = ds; S.modified = false; S.dash = null;
       S.instruction = instr.trim(); S.filters = emptyF(); S.dismissed = false; S.chat = [];
       S.history.push(S.instruction || text.slice(0, 80) || S.files.map(f => f.name).join(', '));
       rebuild();
@@ -114,21 +115,29 @@
     return 'executive';
   }
   function rebuild() {
+    const keep = S.dash && S.dash.analysis;
     S.profile = E.profile(S.ds, S.instruction);
-    S.dash = E.buildAll(S.profile);
+    S.dash = E.buildAll(S.profile); S.dash.analysis = keep || [];
+    applyLayout();
     S.insights = SDInsights.assess(S.ds, S.profile);
   }
 
   /* ---------- resultados ---------- */
-  function showResults() {
-    $('#viewHome').hidden = true; $('#viewResults').hidden = false; $('#btnNew').hidden = false; $('#btnPanel').hidden = false;
-    renderAll(true); window.scrollTo(0, 0);
+  function showResults() { setView('results'); }
+  function goHome() { setView('home'); }
+  function setView(v) {
+    if (v !== 'home' && !S.ds) { toast('Importe e gere os dados primeiro (Criar Dashboards).', true); v = 'home'; }
+    S.view = v;
+    $('#viewHome').hidden = v !== 'home'; $('#viewExplore').hidden = v !== 'explore'; $('#viewResults').hidden = v !== 'results';
+    $('#btnNew').hidden = v === 'home'; $('#btnPanel').hidden = v !== 'results'; if (v !== 'results') $('#panel').hidden = true;
+    $$('#mainnav button').forEach(b => b.setAttribute('aria-current', b.dataset.nav === v ? 'page' : 'false'));
+    if (v === 'home') renderHome(); if (v === 'explore') SDExplore.refresh(); if (v === 'results') renderAll(true);
+    window.scrollTo(0, 0);
   }
-  function goHome() { $('#viewHome').hidden = false; $('#viewResults').hidden = true; $('#btnNew').hidden = true; $('#btnPanel').hidden = true; $('#panel').hidden = true; renderHome(); }
   function renderAll(anim) { renderTabs(); renderBanner(); renderFilters(); renderBuilder(); renderBoard(anim); syncPanel(); renderChat(); }
-  function goTab(t) { S.tab = t; renderTabs(); renderFilters(); renderBuilder(); renderBoard(true); syncPanel(); }
+  function goTab(t) { S.tab = t; if (S.view !== 'results') { setView('results'); return; } renderTabs(); renderFilters(); renderBuilder(); renderBoard(true); syncPanel(); }
   function renderTabs() {
-    $('#tabs').innerHTML = TABS.map(([k, l]) => `<button class="tab" role="tab" data-tab="${k}" aria-selected="${S.tab === k}">${l}${k === 'insights' ? `<span class="q-badge" title="Qualidade dos dados">${S.insights.score}</span>` : ''}</button>`).join('');
+    $('#tabs').innerHTML = TABS.filter(([k]) => k !== 'analysis' || (S.dash.analysis && S.dash.analysis.length) || S.tab === 'analysis').map(([k, l]) => `<button class="tab" role="tab" data-tab="${k}" aria-selected="${S.tab === k}">${l}${k === 'insights' ? `<span class="q-badge" title="Qualidade dos dados">${S.insights.score}</span>` : ''}</button>`).join('');
   }
   function renderBanner() {
     const b = $('#banner'), warn = S.insights.items.filter(i => i.level === 'warn').length;
@@ -202,11 +211,12 @@
     const ins = S.tab === 'insights';
     $('#capture').hidden = ins; $('#insightsView').hidden = !ins;
     if (ins) { renderInsights(); return; }
-    const rows = curRows(), title = S.prefs.titles[S.tab] || DEF_TITLES[S.tab];
+    const rows = curRows(), title = S.prefs.titles[S.tab] || (S.tab === 'analysis' && S.analysisTitle) || DEF_TITLES[S.tab];
     $('#capTitle').textContent = title;
     const fd = filterDesc();
     $('#capSub').textContent = `${rows.length} de ${S.ds.rows.length} registros${fd.length ? ' · ' + fd.join(' · ') : ''} · ${new Date().toLocaleDateString('pt-BR')}`;
-    SDRender.render($('#board'), S.dash[S.tab], { prefs: S.prefs, animate: !!animate }, S.profile, rows);
+    SDRender.render($('#board'), S.dash[S.tab], { prefs: S.prefs, animate: !!animate, onChange: saveLayout }, S.profile, rows);
+    saveLayout();
   }
 
   function renderInsights() {
@@ -225,7 +235,7 @@
     S.ds = r.ds; S.modified = true; S.filters = emptyF(); rebuild(); renderAll(false); toast(`Correção aplicada: ${r.changed} alteração(ões). Dashboards atualizados.`);
   }
   function restoreOriginal() {
-    S.ds = { ...S.orig, rows: S.orig.rows.map(r => ({ ...r })), columns: S.orig.columns.map(c => ({ ...c })) }; S.modified = false; S.filters = emptyF();
+    S.ds = S.orig; S.modified = false; S.filters = emptyF();
     rebuild(); renderAll(false); toast('Dados originais restaurados.');
   }
 
@@ -287,6 +297,54 @@
   function moveW(id, delta) { const a = S.dash[S.tab], i = a.findIndex(w => w.id === id), j = i + delta; if (j < 0 || j >= a.length) return; [a[i], a[j]] = [a[j], a[i]]; renderBoard(false); renderPanelWidgets(); }
   function moveBefore(src, dst) { const a = S.dash[S.tab], i = a.findIndex(w => w.id === src); if (i < 0) return; const [w] = a.splice(i, 1); a.splice(a.findIndex(x => x.id === dst), 0, w); renderBoard(false); renderPanelWidgets(); }
 
+  async function cardAction(act, card, w) {
+    try {
+      if (act === 'copy') { const r = await SDExport.copy(card, w.title); toast(r === 'copied' ? 'Copiado como imagem. Cole no PowerPoint com Ctrl+V.' : r === 'parts' ? 'Conteúdo muito longo: exportado em partes (PNG baixados).' : 'Este navegador não permite copiar imagens; o PNG foi baixado.'); }
+      else if (act === 'png') { const n = await SDExport.png(card, w.title); toast(n > 1 ? `Gráfico longo: exportado em ${n} partes (todo o conteúdo, sem cortes).` : 'PNG baixado.'); }
+      else if (act === 'exp') openExpanded(w);
+      else if (act === 'cfg') editWidget(w);
+      else if (act === 'del') { S.dash[S.tab] = S.dash[S.tab].filter(x => x.id !== w.id); renderBoard(false); renderPanelWidgets(); }
+    } catch (err) { toast(err.message || 'Não foi possível exportar.', true); }
+  }
+  function openExpanded(w) {
+    const d = $('#dlg'); d.innerHTML = `<div class="xwrap"><div class="xhead"><h2>${esc(w.title)}</h2><button class="btn ghost" id="xClose">Fechar</button></div><div id="xbody"></div></div>`;
+    d.classList.add('wide'); d.returnValue = '';
+    const clone = { ...w, span: 12, h: null, wpx: null, auto: true }; d._xw = clone;
+    const el = SDRender.cardEl(clone, { prefs: S.prefs, animate: false, onChange: null, colW: 80 }, S.profile, curRows(), { expanded: true });
+    $('#xbody', d).appendChild(el);
+    $('#xClose', d).onclick = () => d.close();
+    d.addEventListener('close', () => { SDRender.dispose(el); d.classList.remove('wide'); d._xw = null; }, { once: true });
+    d.showModal();
+  }
+  /* ---------- persistência de layout ---------- */
+  const CFGK = ['span', 'h', 'wpx', 'auto', 'limit', 'sort', 'chart', 'userChart', 'color', 'title'];
+  const lsig = () => S.ds.columns.map(c => c.name + ':' + c.type).join('|');
+  const wkey = w => [w.kind, w.data || '', w.m || '', w.m2 || '', w.dim || '', w.dim2 || '', w.date || '', w.agg || ''].join('~');
+  const readL = () => { try { return JSON.parse(localStorage.getItem(LKEY) || '{}'); } catch (e) { return {}; } };
+  function saveLayout() {
+    if (!S.ds || !S.dash) return;
+    try {
+      const all = readL(), L = all[lsig()] = {};
+      Object.keys(S.dash).forEach(tab => {
+        const ws = S.dash[tab];
+        if (tab === 'custom' || tab === 'analysis') L[tab] = { specs: ws.map(({ id, q, ...r }) => r), title: tab === 'analysis' ? S.analysisTitle : undefined };
+        else L[tab] = { order: ws.map(wkey), cfg: Object.fromEntries(ws.map(w => [wkey(w), Object.fromEntries(CFGK.filter(k => w[k] !== undefined).map(k => [k, w[k]]))])) };
+      });
+      const keys = Object.keys(all); if (keys.length > 8) delete all[keys[0]];
+      localStorage.setItem(LKEY, JSON.stringify(all));
+    } catch (e) { /* sem persistência */ }
+  }
+  function applyLayout() {
+    const L = readL()[lsig()]; if (!L) return;
+    Object.keys(S.dash).forEach(tab => {
+      const s = L[tab]; if (!s) return;
+      if (s.specs) { if (tab === 'analysis' && s.title) S.analysisTitle = s.title; S.dash[tab] = s.specs.map(sp => E.W(sp)); return; }
+      const map = new Map(S.dash[tab].map(w => [wkey(w), w])), out = [];
+      (s.order || []).forEach(k => { const w = map.get(k); if (w) { Object.assign(w, s.cfg[k] || {}); out.push(w); map.delete(k); } });
+      S.dash[tab] = out;
+    });
+  }
+
   /* ---------- configuração de widget ---------- */
   async function editWidget(w) {
     const p = S.profile, series = SDRender.isSeries(w), o = (v, l, s) => `<option value="${esc(v)}"${s ? ' selected' : ''}>${esc(l)}</option>`;
@@ -299,7 +357,12 @@
     }
     if (w.data === 'group') h += `<label class="fld">Agrupar por<select name="dim">${p.dims.map(c => o(c.name, c.name, w.dim === c.name)).join('')}</select></label><label class="fld">Máximo de itens<select name="limit">${[5, 8, 10, 15, 20].map(n => o(n, n, (w.limit || 8) === n)).join('')}</select></label>`;
     if (w.data === 'time') h += `<label class="fld">Coluna de data<select name="date">${p.dates.map(c => o(c.name, c.name, w.date === c.name)).join('')}</select></label><label class="fld">Granularidade<select name="grain">${[['auto', 'Automática'], ['day', 'Dia'], ['month', 'Mês'], ['year', 'Ano']].map(([v, l]) => o(v, l, (w.grain || 'auto') === v)).join('')}</select></label>`;
-    h += `<label class="fld">Largura<select name="span">${[[3, 'Pequeno'], [4, 'Compacto'], [6, 'Médio'], [8, 'Largo'], [12, 'Total']].map(([v, l]) => o(v, l, +w.span === v)).join('')}</select></label>`;
+    const mx = SDRender.isMatrix(w);
+    if (mx) h = h.replace('<label class="fld">Título', `<label class="fld">Formato<select name="chart">${[['stacked', 'Barras empilhadas'], ['sbar', 'Empilhadas horizontais'], ['bar', 'Barras agrupadas'], ['hbar', 'Agrupadas horizontais'], ['line', 'Linhas']].map(([v, l]) => o(v, l, w.chart === v)).join('')}</select></label><label class="fld">Título`);
+    if (w.kind !== 'kpi') h += `<label class="fld">Tamanho predefinido<select name="preset">${[['', 'Manter atual'], ['c', 'Compacto'], ['m', 'Médio'], ['g', 'Grande'], ['x', 'Extra grande']].map(([v, l]) => o(v, l, false)).join('')}</select></label><div class="row2"><label class="fld">Largura (px)<input type="text" inputmode="numeric" name="wpx" value="${w.wpx || ''}" placeholder="automática"></label><label class="fld">Altura (px)<input type="text" inputmode="numeric" name="hpx" value="${w.h || ''}" placeholder="automática"></label></div>`;
+    h += `<label class="fld">Largura em colunas (de 12)<select name="span">${[2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(n => o(n, n, +w.span === n)).join('')}</select></label>`;
+    if (series || mx) h += `<label class="check mt"><input type="checkbox" name="auto"${w.auto !== false ? ' checked' : ''}> Ajustar tamanho ao conteúdo</label>`;
+    h += '<label class="check"><input type="checkbox" name="reset"> Restaurar tamanho original</label>';
     if (w.kind === 'chart') h += `<label class="check mt"><input type="checkbox" name="usecolor"${w.color ? ' checked' : ''}> Usar cor própria <input type="color" name="color" value="${w.color || S.prefs.palette[0]}"></label>`;
     h += '<div class="dlg-f"><button class="btn ghost" value="cancel">Cancelar</button><button class="btn primary" value="ok">Aplicar</button></div></form>';
     const { val, fd } = await openDlg(h); if (val !== 'ok' || !fd) return;
@@ -310,7 +373,11 @@
     if (fd.has('agg')) w.agg = w.m ? g('agg') : 'count'; else if (w.kind !== 'kpi' && series && !w.m) w.agg = 'count';
     ['dim', 'date', 'grain'].forEach(k => { if (fd.has(k)) w[k] = g(k); });
     if (fd.has('limit')) w.limit = +g('limit');
-    w.span = +g('span');
+    const PRE = { c: [4, 200], m: [6, 260], g: [8, 360], x: [12, 480] }, pr = PRE[g('preset')], hp = parseInt(g('hpx')), wp = parseInt(g('wpx'));
+    if (g('reset')) { w.span = w.span0 || w.span; delete w.h; delete w.wpx; w.auto = true; }
+    else if (pr) { w.span = pr[0]; w.h = w.kind === 'kpi' ? undefined : pr[1]; delete w.wpx; }
+    else { w.span = +g('span'); if (wp >= 120) w.wpx = Math.min(wp, 4000); else delete w.wpx; if (hp >= 100) w.h = Math.min(hp, 6000); else delete w.h; }
+    if (fd.has('auto')) w.auto = !!g('auto');
     if (w.kind === 'chart') { if (g('usecolor')) w.color = g('color'); else delete w.color; }
     renderBoard(false); renderPanelWidgets();
   }
@@ -328,7 +395,12 @@
     const comp = $('#composer');
     ['dragover', 'dragenter'].forEach(ev => comp.addEventListener(ev, e => { e.preventDefault(); comp.classList.add('drag'); }));
     ['dragleave', 'drop'].forEach(ev => comp.addEventListener(ev, e => { e.preventDefault(); comp.classList.remove('drag'); if (ev === 'drop' && e.dataTransfer.files.length) addFiles(e.dataTransfer.files); }));
-    $('#brand').addEventListener('click', e => { e.preventDefault(); if (S.ds) goHome(); });
+    $('#mainnav').addEventListener('click', e => { const b = e.target.closest('[data-nav]'); if (b) setView(b.dataset.nav); });
+    $('#pApplyAll').addEventListener('click', () => { allW().forEach(w => { delete w.color; }); commit(true); toast('Paleta aplicada a todos os gráficos.'); });
+    $('#pRestoreColors').addEventListener('click', () => { setColor(null, 'Magenta'); toast('Cores originais restauradas.'); });
+    $('#pPresent').addEventListener('click', () => ctx.presentation());
+    $('#pResetLayout').addEventListener('click', () => { const fresh = E.buildAll(S.profile); ['executive', 'operational', 'analytical'].forEach(k => { S.dash[k] = fresh[k]; }); allW().forEach(w => { w.span = w.span0 || w.span; delete w.h; delete w.wpx; w.auto = true; }); renderBoard(false); renderPanelWidgets(); toast('Layout original restaurado (tamanhos e visualizações padrão).'); });
+    $('#brand').addEventListener('click', e => { e.preventDefault(); goHome(); });
     $('#btnNew').addEventListener('click', goHome);
     $('#btnPanel').addEventListener('click', () => { const p = $('#panel'); p.hidden = !p.hidden; });
     $('#panelClose').addEventListener('click', () => { $('#panel').hidden = true; });
@@ -354,16 +426,8 @@
     $('#builder').addEventListener('click', e => { if (e.target.id === 'bAdd') builderAdd(); });
 
     const board = $('#board');
-    board.addEventListener('click', async e => {
-      const b = e.target.closest('[data-act]'); if (!b) return;
-      const card = b.closest('.card'), w = findW(card.dataset.id); if (!w) return;
-      try {
-        if (b.dataset.act === 'copy') { const r = await SDExport.copy(card, w.title); toast(r === 'copied' ? 'Copiado como imagem. Cole no PowerPoint com Ctrl+V.' : 'Este navegador não permite copiar imagens; o PNG foi baixado.'); }
-        else if (b.dataset.act === 'png') { await SDExport.png(card, w.title); toast('PNG baixado.'); }
-        else if (b.dataset.act === 'cfg') editWidget(w);
-        else if (b.dataset.act === 'del') { S.dash[S.tab] = S.dash[S.tab].filter(x => x.id !== w.id); renderBoard(false); renderPanelWidgets(); }
-      } catch (err) { toast(err.message || 'Não foi possível exportar.', true); }
-    });
+    board.addEventListener('click', e => { const b = e.target.closest('[data-act]'); if (!b) return; const card = b.closest('.card'), w = findW(card.dataset.id); if (w) cardAction(b.dataset.act, card, w); });
+    $('#dlg').addEventListener('click', e => { const b = e.target.closest('.xwrap [data-act]'); if (!b) return; const w = $('#dlg')._xw; if (w) cardAction(b.dataset.act, b.closest('.card'), w); });
     let dragId = null;
     board.addEventListener('mousedown', e => { const g = e.target.closest('.grip'); if (g) g.closest('.card').draggable = true; });
     board.addEventListener('dragstart', e => { const c = e.target.closest && e.target.closest('.card'); if (!c || !c.draggable) return; dragId = c.dataset.id; c.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', dragId); });
@@ -371,6 +435,28 @@
     board.addEventListener('drop', e => { if (!dragId) return; e.preventDefault(); const c = e.target.closest('.card'); if (c && c.dataset.id !== dragId) moveBefore(dragId, c.dataset.id); });
     board.addEventListener('dragend', () => { dragId = null; $$('.card', board).forEach(c => { c.classList.remove('dragging', 'over'); c.draggable = false; }); });
 
+    board.addEventListener('pointerdown', e => {
+      const h = e.target.closest('.rz'); if (!h) return; e.preventDefault();
+      const card = h.closest('.card'), w = findW(card.dataset.id); if (!w) return;
+      try { h.setPointerCapture(e.pointerId); } catch (err) { /* ok */ }
+      const r = card.getBoundingClientRect(), gap = 16, colW = (board.getBoundingClientRect().width - 11 * gap) / 12, sx = e.clientX, sy = e.clientY;
+      const tgt = () => card.querySelector('.cs') || card.querySelector('.tbl-wrap') || card.querySelector('.card-b');
+      const sh = tgt().getBoundingClientRect().height, mode = h.classList.contains('rz-r') ? 'w' : h.classList.contains('rz-b') ? 'h' : 'wh';
+      let ns = null, nh = null;
+      const mv = ev => {
+        if (mode !== 'h') { ns = Math.max(2, Math.min(12, Math.round((r.width + ev.clientX - sx + gap) / (colW + gap)))); card.style.setProperty('--span', ns); card.style.width = ''; }
+        if (mode !== 'w') {
+          nh = Math.max(100, Math.round(sh + ev.clientY - sy)); const t = tgt(); t.style.maxHeight = nh + 'px';
+          const bx = t.classList.contains('cs') ? t.firstElementChild : null; if (bx) bx.style.height = Math.max(nh, +bx.dataset.need || 0) + 'px';
+        }
+      };
+      const up = () => {
+        h.removeEventListener('pointermove', mv); h.removeEventListener('pointerup', up); h.removeEventListener('pointercancel', up);
+        if (ns) { w.span = ns; delete w.wpx; } if (nh) { w.h = nh; }
+        renderBoard(false); renderPanelWidgets();
+      };
+      h.addEventListener('pointermove', mv); h.addEventListener('pointerup', up); h.addEventListener('pointercancel', up);
+    });
     $('#btnCopyDash').addEventListener('click', async () => {
       if (S.tab === 'insights') return toast('Abra um dashboard para copiá-lo.', true);
       try { const r = await SDExport.copy($('#capture'), S.prefs.titles[S.tab] || DEF_TITLES[S.tab]); toast(r === 'copied' ? 'Dashboard copiado como imagem.' : 'Este navegador não permite copiar imagens; o PNG foi baixado.'); } catch (err) { toast(err.message, true); }
@@ -409,5 +495,7 @@
     pw.addEventListener('click', e => { const b = e.target.closest('[data-mv]'); if (b) moveW(b.closest('.pw').dataset.w, +b.dataset.mv); });
   }
 
-  applyTheme(); renderHome(); wire();
+  SDExplore.init({ ds: () => S.ds, profile: () => S.profile, rows: curRows, toast, filterNote: () => filterDesc().join(' · '),
+    onDashboard(ws, title) { S.dash.analysis = ws; S.analysisTitle = title; S.tab = 'analysis'; setView('results'); toast('Dashboard gerado. Ele está em Meus Dashboards → Análise.'); } });
+  applyTheme(); wire(); setView('home');
 })();

@@ -1,7 +1,7 @@
 /* Smart Dash Studio — comandos em linguagem natural (interpretação local por regras) */
 const SDCommands = (() => {
   const N = SDParser.norm;
-  const COLORS = { azul: 'Azul', verde: 'Verde', laranja: 'Laranja', roxo: 'Roxo', violeta: 'Roxo', cinza: 'Grafite', grafite: 'Grafite', turquesa: 'Turquesa', teal: 'Turquesa', magenta: 'Magenta', rosa: 'Magenta', multicor: 'Multicor', colorido: 'Multicor' };
+  const COLORS = { azul: 'Azul', verde: 'Verde', laranja: 'Laranja', roxo: 'Roxo', violeta: 'Roxo', cinza: 'Grafite', grafite: 'Grafite', turquesa: 'Turquesa', teal: 'Turquesa', magenta: 'Magenta', corporativo: 'Corporativo', rosa: 'Magenta', multicor: 'Multicor', colorido: 'Multicor' };
   const EXTRA = { vermelho: '#C62828', amarelo: '#F9A825', marrom: '#6D4C41' };
   const TYPES = [['barras horizontais', 'hbar'], ['barra horizontal', 'hbar'], ['rosca', 'doughnut'], ['donut', 'doughnut'], ['pizza', 'pie'], ['colunas', 'bar'], ['coluna', 'bar'], ['barras', 'bar'], ['barra', 'bar'], ['linhas', 'line'], ['linha', 'line'], ['area', 'area']];
   const TNAME = { bar: 'barras', hbar: 'barras horizontais', doughnut: 'rosca', pie: 'pizza', line: 'linha', area: 'área' };

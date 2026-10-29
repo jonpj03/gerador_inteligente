@@ -2,7 +2,7 @@
 const SDEngine = (() => {
   const N = SDParser.norm;
   const RX = {
-    person: /respons|colaborad|analista|equipe|\btime\b|vendedor|atendente|funcion|pessoa|\bnome\b|owner|dono|assignee|tecnico|agente|operador|gerente|consultor/,
+    person: /respons|professor|docente|aluno|colaborad|analista|equipe|\btime\b|vendedor|atendente|funcion|pessoa|\bnome\b|owner|dono|assignee|tecnico|agente|operador|gerente|consultor/,
     status: /status|situacao|etapa|fase|estagio|andamento/,
     target: /\bmeta\b|target|planejad|previst|orcad|objetivo/,
     finance: /valor|custo|receita|preco|faturam|despesa|lucro|venda|r\$|orcamento|pagament|salario|comiss/,
@@ -37,8 +37,9 @@ const SDEngine = (() => {
   const hexRgb = h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
   const PRESETS = [
     { name: 'Magenta', primary: '#C2185B', palette: ['#C2185B', '#880E4F', '#E91E63', '#F06292', '#AD1457', '#F8BBD0', '#6A1B4D', '#9C27B0'] },
-    { name: 'Azul', primary: '#1565C0' }, { name: 'Verde', primary: '#2E7D32' }, { name: 'Laranja', primary: '#E65100' },
-    { name: 'Roxo', primary: '#6A1B9A' }, { name: 'Grafite', primary: '#455A64' }, { name: 'Turquesa', primary: '#00796B' },
+    { name: 'Azul', primary: '#1565C0' }, { name: 'Verde', primary: '#2E7D32' }, { name: 'Roxo', primary: '#6A1B9A' }, { name: 'Laranja', primary: '#E65100' },
+    { name: 'Corporativo', primary: '#1F3A5F', palette: ['#1F3A5F', '#2E86AB', '#7A8B99', '#C2185B', '#F2A900', '#4C9F70', '#8E6C8A', '#5B5B5B'] },
+    { name: 'Grafite', primary: '#455A64' }, { name: 'Turquesa', primary: '#00796B' },
     { name: 'Multicor', primary: '#C2185B', palette: ['#C2185B', '#1565C0', '#2E7D32', '#F9A825', '#6A1B9A', '#00838F', '#E65100', '#546E7A'] }
   ].map(p => ({ ...p, palette: p.palette || makePalette(p.primary) }));
 
@@ -65,7 +66,7 @@ const SDEngine = (() => {
     p.status = cats.find(c => RX.status.test(N(c.name))) ||
       cats.find(c => c.unique <= 10 && ds.rows.some(r => r[c.name] && isDone(r[c.name]))) || null;
     p.target = p.measures.find(c => RX.target.test(N(c.name))) || null;
-    p.dims = cats.filter(c => c.unique <= 30).sort(by);
+    p.dims = cats.filter(c => c.unique <= 500).sort(by);
     const rank = c => men(c) * 10 + (c === p.person ? 3 : c === p.status ? 0 : 1);
     p.dimsOrdered = [...p.dims].sort((a, b) => rank(b) - rank(a));
     p.primaryMeasure = p.measures.find(c => !p.target || c !== p.target) || p.measures[0] || null;
@@ -75,7 +76,7 @@ const SDEngine = (() => {
   }
 
   /* ---------- construção dos dashboards ---------- */
-  const W = o => ({ id: nid(), span: 6, agg: 'count', m: null, limit: 8, ...o });
+  const W = o => { const w = { id: nid(), span: 6, agg: 'count', m: null, limit: 0, ...o }; if (w.span0 == null) w.span0 = w.span; return w; };
   const mTitle = (m, agg) => !m ? 'registros' : (agg === 'avg' ? 'média de ' : agg === 'sum' ? 'total de ' : '') + m.name;
 
   function buildExecutive(p) {
@@ -87,8 +88,8 @@ const SDEngine = (() => {
     const agg = pm ? aggFor(pm) : 'count';
     if (p.date) w.push(W({ kind: 'chart', data: 'time', chart: 'line', title: 'Evolução de ' + mTitle(pm, agg), m: pm && pm.name, agg, date: p.date.name, span: 8 }));
     const catPie = p.status || p.dimsOrdered.find(c => c.unique <= 8 && c !== p.primaryDim);
-    if (catPie) w.push(W({ kind: 'chart', data: 'group', chart: 'doughnut', title: 'Distribuição por ' + catPie.name, dim: catPie.name, span: p.date ? 4 : 6 }));
-    if (p.primaryDim) w.push(W({ kind: 'chart', data: 'group', chart: 'bar', title: (pm ? cap(mTitle(pm, agg)) : 'Registros') + ' por ' + p.primaryDim.name, m: pm && pm.name, agg, dim: p.primaryDim.name, limit: 8, span: 6 }));
+    if (catPie) w.push(W({ kind: 'chart', data: 'group', chart: 'doughnut', title: 'Distribuição por ' + catPie.name, dim: catPie.name, limit: 8, span: p.date ? 4 : 6 }));
+    if (p.primaryDim) w.push(W({ kind: 'chart', data: 'group', chart: 'bar', title: (pm ? cap(mTitle(pm, agg)) : 'Registros') + ' por ' + p.primaryDim.name, m: pm && pm.name, agg, dim: p.primaryDim.name, span: 6 }));
     w.push(W({ kind: 'highlights', title: 'Destaques', span: 6 }));
     if (w.length < 3) w.unshift(W({ kind: 'notice', title: 'Dados limitados', text: 'Os dados têm poucas colunas numéricas, de data ou de categoria. Foram gerados apenas os indicadores possíveis.', span: 12 }));
     return w;
@@ -102,10 +103,10 @@ const SDEngine = (() => {
     }
     if (P) w.push(W({ kind: 'kpi', title: 'Pessoas / equipes', m: P.name, agg: 'distinct', span: 3 }));
     if (pm && w.length < 4) w.push(W({ kind: 'kpi', title: (aggFor(pm) === 'avg' ? 'Média de ' : 'Total de ') + pm.name, m: pm.name, agg: aggFor(pm), span: 3 }));
-    if (S) w.push(W({ kind: 'chart', data: 'group', chart: 'doughnut', title: 'Status das demandas', dim: S.name, span: P ? 4 : 6 }));
+    if (S) w.push(W({ kind: 'chart', data: 'group', chart: 'doughnut', title: 'Status das demandas', dim: S.name, limit: 8, span: P ? 4 : 6 }));
     if (S && P) w.push(W({ kind: 'chart', data: 'stacked', chart: 'stacked', title: `${P.name} × ${S.name}`, dim: P.name, dim2: S.name, span: 8 }));
-    if (P) w.push(W({ kind: 'chart', data: 'group', chart: 'hbar', title: 'Distribuição de trabalho por ' + P.name, dim: P.name, limit: 10, span: 6 }));
-    if (P && pm) w.push(W({ kind: 'chart', data: 'group', chart: 'bar', title: `Produtividade: ${mTitle(pm, aggFor(pm))} por ${P.name}`, m: pm.name, agg: aggFor(pm), dim: P.name, limit: 10, span: 6 }));
+    if (P) w.push(W({ kind: 'chart', data: 'group', chart: 'hbar', title: 'Distribuição de trabalho por ' + P.name, dim: P.name, span: 6 }));
+    if (P && pm) w.push(W({ kind: 'chart', data: 'group', chart: 'bar', title: `Produtividade: ${mTitle(pm, aggFor(pm))} por ${P.name}`, m: pm.name, agg: aggFor(pm), dim: P.name, span: 6 }));
     if (p.date) w.push(W({ kind: 'chart', data: 'time', chart: 'bar', title: 'Volume de atividades no tempo', date: p.date.name, span: 6 }));
     if (!S && !P && p.primaryDim) w.push(W({ kind: 'chart', data: 'group', chart: 'bar', title: 'Volume por ' + p.primaryDim.name, dim: p.primaryDim.name, span: 6 }));
     if (S) w.push(W({ kind: 'bottlenecks', title: 'Gargalos identificados', span: 12 }));
@@ -116,9 +117,9 @@ const SDEngine = (() => {
 
   function buildAnalytical(p) {
     const w = [], pm = p.primaryMeasure, agg = pm ? aggFor(pm) : 'count', d1 = p.dimsOrdered[0], d2 = p.dimsOrdered[1];
-    p.dimsOrdered.slice(0, 2).forEach(d => w.push(W({ kind: 'chart', data: 'group', chart: 'bar', title: `${cap(mTitle(pm, agg))} por ${d.name}`, m: pm && pm.name, agg, dim: d.name, limit: 10, span: 6 })));
+    p.dimsOrdered.slice(0, 2).forEach(d => w.push(W({ kind: 'chart', data: 'group', chart: 'bar', title: `${cap(mTitle(pm, agg))} por ${d.name}`, m: pm && pm.name, agg, dim: d.name, span: 6 })));
     const m2 = p.measures.find(c => c !== pm);
-    if (m2 && d1) w.push(W({ kind: 'chart', data: 'group', chart: 'bar', title: `${cap(mTitle(m2, aggFor(m2)))} por ${d1.name}`, m: m2.name, agg: aggFor(m2), dim: d1.name, limit: 10, span: 6 }));
+    if (m2 && d1) w.push(W({ kind: 'chart', data: 'group', chart: 'bar', title: `${cap(mTitle(m2, aggFor(m2)))} por ${d1.name}`, m: m2.name, agg: aggFor(m2), dim: d1.name, span: 6 }));
     if (p.date) w.push(W({ kind: 'chart', data: 'time', chart: 'line', title: 'Evolução temporal de ' + mTitle(pm, agg), m: pm && pm.name, agg, date: p.date.name, span: 6 }));
     if (d1 && d2) {
       if (d2.unique <= 6) w.push(W({ kind: 'chart', data: 'stacked', chart: 'stacked', title: `${d1.name} × ${d2.name}`, dim: d1.name, dim2: d2.name, span: 6 }));
@@ -141,13 +142,14 @@ const SDEngine = (() => {
   /* ---------- cálculo ---------- */
   const colOf = (p, name) => p.ds.columns.find(c => c.name === name);
   function aggregate(rows, m, agg) {
-    if (agg === 'count' || !m) return rows.length;
-    if (agg === 'distinct') return new Set(rows.map(r => r[m]).filter(v => v != null)).size;
+    if (!m && agg !== 'doneRate') return rows.length;
+    if (agg === 'count') { let n = 0; for (let i = 0; i < rows.length; i++) if (rows[i][m] != null) n++; return n; }
+    if (agg === 'distinct') { const s = new Set(); for (const r of rows) { const v = r[m]; if (v != null) s.add(v instanceof Date ? v.getTime() : v); } return s.size; }
     if (agg === 'doneRate') { const ok = rows.filter(r => r[m] != null); return ok.length ? 100 * ok.filter(r => isDone(r[m])).length / ok.length : null; }
-    const vs = rows.map(r => r[m]).filter(v => typeof v === 'number');
-    if (!vs.length) return null;
-    const s = vs.reduce((a, b) => a + b, 0);
-    return agg === 'sum' ? s : agg === 'avg' ? s / vs.length : agg === 'max' ? Math.max(...vs) : Math.min(...vs);
+    let n = 0, s = 0, mx = -Infinity, mn = Infinity;
+    for (let i = 0; i < rows.length; i++) { const v = rows[i][m]; if (typeof v === 'number') { n++; s += v; if (v > mx) mx = v; if (v < mn) mn = v; } }
+    if (!n) return null;
+    return agg === 'sum' ? s : agg === 'avg' ? s / n : agg === 'max' ? mx : mn;
   }
   const keyOf = v => v == null || v === '' ? '(Sem valor)' : v;
   function groupRows(rows, dim, m, agg) {
@@ -156,9 +158,10 @@ const SDEngine = (() => {
     return [...g].map(([k, rs]) => ({ k, v: aggregate(rs, m, agg), n: rs.length }));
   }
   function autoGrain(rows, dc) {
-    const ds = rows.map(r => r[dc]).filter(Boolean).map(d => d.getTime());
-    if (!ds.length) return 'month';
-    const span = (Math.max(...ds) - Math.min(...ds)) / 864e5;
+    let mn = Infinity, mx = -Infinity;
+    for (let i = 0; i < rows.length; i++) { const d = rows[i][dc]; if (d) { const t = d.getTime(); if (t < mn) mn = t; if (t > mx) mx = t; } }
+    if (mn === Infinity) return 'month';
+    const span = (mx - mn) / 864e5;
     return span > 1800 ? 'year' : span > 75 ? 'month' : 'day';
   }
   const pk = (d, g) => g === 'year' ? String(d.getFullYear()) : g === 'month' ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` : SDParser.ymd(d);
@@ -190,28 +193,69 @@ const SDEngine = (() => {
     return { pct: (a - b) / Math.abs(b) * 100, label: 'vs. ' + pts[pts.length - 2].label };
   }
 
-  function chartData(w, rows, p, ft) {
+  const sortFn = s => s === 'asc' ? (a, b) => a.v - b.v : s === 'az' ? (a, b) => String(a.label).localeCompare(String(b.label), 'pt-BR', { numeric: true }) : s === 'za' ? (a, b) => String(b.label).localeCompare(String(a.label), 'pt-BR', { numeric: true }) : (a, b) => b.v - a.v;
+  function pickRows(items, w, pie, chrono) {
+    const total = items.length, q = N(w.q || '');
+    let g = q ? items.filter(x => N(x.label).includes(q)) : items.slice();
+    const matched = g.length, lim = +w.limit || 0; let others = 0;
+    if (lim > 0 && g.length > lim) {
+      g.sort((a, b) => b.v - a.v);
+      const rest = g.slice(lim); g = g.slice(0, lim);
+      if (pie && rest.length) { others = rest.length; g.push({ k: '__o', label: `Outros (${rest.length})`, v: rest.reduce((a, x) => a + x.v, 0), rest: true }); }
+    }
+    const s = w.sort || (chrono ? 'none' : 'desc');
+    if (s !== 'none') { const o = g.filter(x => x.rest); g = g.filter(x => !x.rest).sort(sortFn(s)).concat(o); }
+    return { g, total, matched, others, q: !!q };
+  }
+  function crosstab(rows, rf, cf, o) {
+    o = o || {};
+    const gR = rf && rf.type === 'date' ? (o.grain && o.grain !== 'auto' ? o.grain : autoGrain(rows, rf.name)) : null;
+    const gC = cf && cf.type === 'date' ? (o.grain && o.grain !== 'auto' ? o.grain : autoGrain(rows, cf.name)) : null;
+    const kf = (r, c, g) => { const v = r[c.name]; return c.type === 'date' ? (v ? pk(v, g) : '(Sem valor)') : keyOf(v); };
+    let top = null;
+    if (cf && cf.type !== 'date' && o.maxCols) {
+      const cnt = new Map(); for (const r of rows) { const k = kf(r, cf); cnt.set(k, (cnt.get(k) || 0) + 1); }
+      if (cnt.size > o.maxCols) top = new Set([...cnt].sort((a, b) => b[1] - a[1]).slice(0, o.maxCols).map(x => x[0]));
+    }
+    const rowMap = new Map(), colMap = new Map(), cells = new Map();
+    const add = (m, k, r) => { const a = m.get(k); if (a) a.push(r); else m.set(k, [r]); };
+    for (const r of rows) {
+      const rk = rf ? kf(r, rf, gR) : 'Total'; let ck = cf ? kf(r, cf, gC) : '__all__';
+      if (top && !top.has(ck)) ck = 'Outros';
+      add(rowMap, rk, r); add(colMap, ck, r); add(cells, rk + '\u0001' + ck, r);
+    }
+    const order = (m, c) => {
+      const ks = [...m.keys()];
+      if (c && c.type === 'date') return ks.sort((a, b) => a === '(Sem valor)' ? 1 : b === '(Sem valor)' ? -1 : a < b ? -1 : a > b ? 1 : 0);
+      ks.sort((a, b) => m.get(b).length - m.get(a).length);
+      if (m.has('Outros')) { ks.splice(ks.indexOf('Outros'), 1); ks.push('Outros'); }
+      return ks;
+    };
+    return { rowMap, colMap, cells, rowKeys: order(rowMap, rf), colKeys: order(colMap, cf), gR, gC, grouped: !!top,
+      rowLabel: k => rf && rf.type === 'date' && k !== '(Sem valor)' ? plabel(k, gR) : k,
+      colLabel: k => cf && cf.type === 'date' && k !== '(Sem valor)' ? plabel(k, gC) : (k === '__all__' ? 'Total' : k),
+      cell: (r, c) => cells.get(r + '\u0001' + c) || [] };
+  }
+  const zeroAgg = w => w.agg === 'sum' || w.agg === 'count' || !w.m;
+
+  function chartData(w, rows, p, ft, opts) {
     if (w.data === 'time') {
       const { pts } = timeSeries(rows, w.date, w.m, w.agg, w.grain);
       return { labels: pts.map(x => x.label), datasets: [{ label: w.m ? `${w.agg === 'avg' ? 'Média' : 'Total'} de ${w.m}` : 'Registros', data: pts.map(x => x.v) }], fmt: ft };
     }
     if (w.data === 'group') {
-      let g = groupRows(rows, w.dim, w.m, w.agg).filter(x => x.v != null).sort((a, b) => b.v - a.v);
-      const lim = w.limit || 8;
-      if (g.length > lim) {
-        const top = g.slice(0, lim), rest = g.slice(lim);
-        if (w.agg === 'sum' || w.agg === 'count' || !w.m) top.push({ k: 'Outros', v: rest.reduce((a, x) => a + x.v, 0) });
-        g = top;
-      }
-      return { labels: g.map(x => x.k), datasets: [{ label: w.m || 'Registros', data: g.map(x => x.v) }], fmt: ft };
+      const items = groupRows(rows, w.dim, w.m, w.agg).filter(x => x.v != null).map(x => ({ k: x.k, label: String(x.k), v: x.v }));
+      const r = pickRows(items, w, !!(opts && opts.pie) && zeroAgg(w));
+      return { labels: r.g.map(x => x.label), datasets: [{ label: w.m || 'Registros', data: r.g.map(x => x.v) }], fmt: ft, total: r.total, matched: r.matched, shown: r.g.length - (r.others ? 1 : 0), others: r.others, q: r.q };
     }
     if (w.data === 'stacked') {
-      const tot = groupRows(rows, w.dim, null, 'count').sort((a, b) => b.n - a.n).slice(0, 10).map(x => x.k);
-      let s2 = groupRows(rows, w.dim2, null, 'count').sort((a, b) => b.n - a.n).map(x => x.k);
-      const extra = s2.length > 6; s2 = s2.slice(0, 6);
-      const ds = s2.map(s => ({ label: s, data: tot.map(t => rows.filter(r => keyOf(r[w.dim]) === t && keyOf(r[w.dim2]) === s).length) }));
-      if (extra) ds.push({ label: 'Outros', data: tot.map(t => rows.filter(r => keyOf(r[w.dim]) === t && !s2.includes(keyOf(r[w.dim2]))).length) });
-      return { labels: tot, datasets: ds, fmt: 'number' };
+      const rc = colOf(p, w.dim), cc = w.dim2 ? colOf(p, w.dim2) : null;
+      const ct = crosstab(rows, rc, cc, { grain: w.grain, maxCols: 12 });
+      const empty = zeroAgg(w) ? 0 : null;
+      const items = ct.rowKeys.map(k => { const v = aggregate(ct.rowMap.get(k), w.m, w.agg); return { k, label: ct.rowLabel(k), v: v == null ? 0 : v }; });
+      const r = pickRows(items, w, false, rc && rc.type === 'date');
+      const datasets = ct.colKeys.map(ck => ({ label: ct.colLabel(ck), data: r.g.map(x => { const cr = ct.cell(x.k, ck); return cr.length ? aggregate(cr, w.m, w.agg) : empty; }) }));
+      return { labels: r.g.map(x => x.label), datasets, fmt: w.m ? ft : 'number', total: r.total, matched: r.matched, shown: r.g.length, others: 0, q: r.q, serOthers: ct.grouped };
     }
     if (w.data === 'scatter') {
       let pts = rows.filter(r => typeof r[w.m] === 'number' && typeof r[w.m2] === 'number').map(r => ({ x: r[w.m], y: r[w.m2] }));
@@ -219,15 +263,30 @@ const SDEngine = (() => {
       return { points: pts, xl: w.m, yl: w.m2, fmt: ft };
     }
     if (w.data === 'hist') {
-      const vs = rows.map(r => r[w.m]).filter(v => typeof v === 'number');
-      if (vs.length < 2) return { labels: [], datasets: [{ data: [] }] };
-      const mn = Math.min(...vs), mx = Math.max(...vs), b = Math.max(5, Math.min(12, Math.ceil(Math.log2(vs.length) + 1)));
-      const step = (mx - mn) / b || 1, bins = new Array(b).fill(0);
-      vs.forEach(v => { bins[Math.min(b - 1, Math.floor((v - mn) / step))]++; });
+      let mn = Infinity, mx = -Infinity, n = 0;
+      for (const r of rows) { const v = r[w.m]; if (typeof v === 'number') { n++; if (v < mn) mn = v; if (v > mx) mx = v; } }
+      if (n < 2) return { labels: [], datasets: [{ data: [] }] };
+      const b = Math.max(5, Math.min(12, Math.ceil(Math.log2(n) + 1))), step = (mx - mn) / b || 1, bins = new Array(b).fill(0);
+      for (const r of rows) { const v = r[w.m]; if (typeof v === 'number') bins[Math.min(b - 1, Math.floor((v - mn) / step))]++; }
       return { labels: bins.map((_, i) => `${fmt(mn + i * step, ft, true)}–${fmt(mn + (i + 1) * step, ft, true)}`), datasets: [{ label: 'Registros', data: bins }], fmt: 'number' };
     }
     return { labels: [], datasets: [] };
   }
+
+  function applyWhere(rows, where, p) {
+    if (!where || !where.length) return rows;
+    const cs = where.map(f => ({ f, c: colOf(p, f.col) })).filter(x => x.c);
+    return rows.filter(r => cs.every(({ f, c }) => {
+      const v = r[f.col];
+      if (f.values) return f.values.includes(keyOf(v));
+      if (c.type === 'date') { if (!v) return false; if (f.from && v < new Date(f.from + 'T00:00:00')) return false; if (f.to && v > new Date(f.to + 'T23:59:59')) return false; return true; }
+      if (typeof v !== 'number') return false;
+      if (f.from !== '' && f.from != null && v < +f.from) return false;
+      if (f.to !== '' && f.to != null && v > +f.to) return false;
+      return true;
+    }));
+  }
+  const rowsFor = (w, rows, p) => applyWhere(rows, w.where, p);
 
   function highlights(rows, p, w) {
     const out = [], pm = p.primaryMeasure, agg = pm ? aggFor(pm) : 'count', ft = pm ? pm.type : 'number';
@@ -281,13 +340,14 @@ const SDEngine = (() => {
       }
       if (p.date) {
         const ds = open.map(r => r[p.date.name]).filter(Boolean);
-        if (ds.length) out.push(`Item em aberto mais antigo: ${SDParser.fmtDate(new Date(Math.min(...ds)))}.`);
+        if (ds.length) { let mn = Infinity; ds.forEach(d => { if (d.getTime() < mn) mn = d.getTime(); }); out.push(`Item em aberto mais antigo: ${SDParser.fmtDate(new Date(mn))}.`); }
       }
     }
     return out;
   }
 
-  function compute(w, rows, p) {
+  function compute(w, rows, p, opts) {
+    rows = applyWhere(rows, w.where, p);
     const mc = w.m ? colOf(p, w.m) : null, ft = mc ? mc.type : 'number';
     switch (w.kind) {
       case 'kpi': {
@@ -295,12 +355,12 @@ const SDEngine = (() => {
         const text = v == null ? '—' : w.agg === 'doneRate' ? fmt(v, 'percent') : (w.agg === 'count' || w.agg === 'distinct') ? fmt(v, 'number') : fmt(v, ft, true);
         return { value: v, text, trend: trend(w, rows, p) };
       }
-      case 'chart': return chartData(w, rows, p, ft);
+      case 'chart': return chartData(w, rows, p, ft, opts);
       case 'heatmap': {
-        const rs = groupRows(rows, w.dim, null, 'count').sort((a, b) => b.n - a.n).slice(0, 12).map(x => x.k);
-        const cs = groupRows(rows, w.dim2, null, 'count').sort((a, b) => b.n - a.n).slice(0, 12).map(x => x.k);
-        const mat = rs.map(r => cs.map(c => rows.filter(x => keyOf(x[w.dim]) === r && keyOf(x[w.dim2]) === c).length));
-        return { rs, cs, mat, max: Math.max(1, ...mat.flat()) };
+        const ct = crosstab(rows, colOf(p, w.dim), colOf(p, w.dim2), { grain: w.grain, maxCols: 30 });
+        let mx = 0;
+        const mat = ct.rowKeys.map(r => ct.colKeys.map(c => { const cr = ct.cell(r, c); const v = cr.length ? aggregate(cr, w.m, w.agg || 'count') : null; if (v != null && v > mx) mx = v; return v; }));
+        return { rs: ct.rowKeys.map(ct.rowLabel), cs: ct.colKeys.map(ct.colLabel), mat, max: mx || 1, fmt: w.m ? ft : 'number', grouped: ct.grouped };
       }
       case 'grouptable': {
         const ms = p.measures.slice(0, 3);
@@ -345,5 +405,5 @@ const SDEngine = (() => {
     return `Li ${p.ds.rows.length} linhas e ${c.length} colunas. Identifiquei: ${parts.join('; ') || 'poucas dimensões analisáveis'}.`;
   }
 
-  return { RX, MFULL, MPT, MEAS, isDone, isFin, aggFor, nid, cap, makePalette, withL, soft, hexRgb, PRESETS, fmt, profile, buildAll, buildExecutive, compute, applyFilters, describe, colOf, W, shade: withL };
+  return { crosstab, aggregate, applyWhere, rowsFor, RX, MFULL, MPT, MEAS, isDone, isFin, aggFor, nid, cap, makePalette, withL, soft, hexRgb, PRESETS, fmt, profile, buildAll, buildExecutive, compute, applyFilters, describe, colOf, W, shade: withL };
 })();

@@ -2,7 +2,7 @@
 const SDParser = (() => {
   const MONTHS = { jan:1, fev:2, feb:2, mar:3, abr:4, apr:4, mai:5, may:5, jun:6, jul:7, ago:8, aug:8, set:9, sep:9, out:10, oct:10, nov:11, dez:12, dec:12 };
   const EXTS = ['xlsx', 'xls', 'csv', 'tsv', 'txt', 'json'];
-  const MAX_BYTES = 15 * 1024 * 1024;
+  const MAX_MB = 50, MAX_BYTES = MAX_MB * 1024 * 1024;
   const norm = s => String(s == null ? '' : s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
   const blank = v => v == null || (typeof v === 'string' && v.trim() === '') || (typeof v === 'number' && isNaN(v));
   const pad = n => String(n).padStart(2, '0');
@@ -180,7 +180,7 @@ const SDParser = (() => {
     const ext = f.name.split('.').pop().toLowerCase();
     if (!EXTS.includes(ext)) return `"${f.name}": formato não suportado. Use XLSX, XLS, CSV, TXT ou JSON.`;
     if (!f.size) return `"${f.name}" está vazio.`;
-    if (f.size > MAX_BYTES) return `"${f.name}" excede o limite de 15 MB.`;
+    if (f.size > MAX_BYTES) return `"${f.name}" excede o limite de ${MAX_MB} MB (tem ${(f.size / 1048576).toFixed(1)} MB).`;
     return null;
   }
 
@@ -214,6 +214,39 @@ const SDParser = (() => {
     }
   }
 
+  /* Leitura em Web Worker (não trava a interface); recai para a thread principal se indisponível */
+  function workerParse(file) {
+    return new Promise((resolve, reject) => {
+      let w, url;
+      try {
+        const lib = [...document.scripts].find(s => /xlsx/.test(s.src)), here = [...document.scripts].find(s => /data-parser\.js/.test(s.src));
+        if (!here || typeof Worker === 'undefined') return reject({ fallback: true });
+        const imps = [lib && lib.src, here.src].filter(Boolean).map(u => JSON.stringify(u)).join(',');
+        const code = `importScripts(${imps});onmessage=async e=>{try{const r=await SDParser.parseFile(e.data);postMessage({ok:true,r});}catch(x){postMessage({ok:false,m:String(x&&x.message||x),n:x&&x.name});}};`;
+        url = URL.createObjectURL(new Blob([code], { type: 'application/javascript' }));
+        w = new Worker(url);
+      } catch (e) { return reject({ fallback: true }); }
+      const done = () => { try { w.terminate(); URL.revokeObjectURL(url); } catch (e) { /* ok */ } };
+      w.onmessage = e => { done(); e.data.ok ? resolve(e.data.r) : reject(Object.assign(new Error(e.data.m), { name: e.data.n || 'Error' })); };
+      w.onerror = () => { done(); reject({ fallback: true }); };
+      w.postMessage(file);
+    });
+  }
+  async function parseFileAsync(file) {
+    const err = validateFile(file);
+    if (err) throw new Error(err);
+    const ext = file.name.split('.').pop().toLowerCase();
+    try {
+      if (file.size > 2 * 1024 * 1024 || ext === 'xlsx' || ext === 'xls') {
+        try { return await workerParse(file); } catch (e) { if (!e || !e.fallback) throw e; }
+      }
+      return await parseFile(file);
+    } catch (e) {
+      if (e && (e.name === 'RangeError' || /memory|allocation|heap|quota/i.test(e.message || ''))) throw new Error(`Memória insuficiente para processar "${file.name}". Feche outras abas, ou divida o arquivo / remova colunas e linhas que não serão usadas.`);
+      throw e;
+    }
+  }
+
   function combine(list, notes) {
     const ok = list.filter(Boolean);
     if (!ok.length) return null;
@@ -231,6 +264,7 @@ const SDParser = (() => {
   }
 
   /* ---------- tipagem ---------- */
+  const DIM_RX = /(respons|colaborad|professor|docente|aluno|estudante|nome|analista|equipe|vendedor|atendente|funcion|pessoa|cliente|disciplina|curso|setor|departamento|cargo|regiao|cidade|estado|produto|unidade|turma|escola)/;
   const ID_RX = /(^id$|^id[\s_]|[\s_]id$|codigo|matricula|cpf|cnpj|protocolo|ticket|^n[o°º]$|numero)/;
   function infer(name, vals) {
     const nn = vals.filter(v => !blank(v)), n = nn.length, nm = norm(name);
@@ -250,6 +284,8 @@ const SDParser = (() => {
     const conv = v => blank(v) ? null : String(v).trim();
     if (ID_RX.test(nm) && uniq / n >= 0.9) return { type: 'id', conv, invalid: 0 };
     if (uniq <= 40 && (uniq / n <= 0.8 || n <= 40)) return { type: 'category', conv, invalid: 0 };
+    if (uniq >= 2 && uniq <= 500 && uniq / n <= 0.6) return { type: 'category', conv, invalid: 0 };
+    if (uniq >= 2 && uniq <= 3000 && DIM_RX.test(nm)) return { type: 'category', conv, invalid: 0 };
     return { type: 'text', conv, invalid: 0 };
   }
 
@@ -258,8 +294,11 @@ const SDParser = (() => {
       const vals = ds.rows.map(r => r[c.name]).filter(v => v != null);
       c.nulls = ds.rows.length - vals.length;
       c.unique = new Set(vals.map(v => v instanceof Date ? v.getTime() : v)).size;
-      if (c.type === 'date' && vals.length) { c.min = new Date(Math.min(...vals)); c.max = new Date(Math.max(...vals)); }
-      if (['number', 'percent', 'currency'].includes(c.type) && vals.length) { c.min = Math.min(...vals); c.max = Math.max(...vals); }
+      if ((c.type === 'date' || ['number', 'percent', 'currency'].includes(c.type)) && vals.length) {
+        let mn = Infinity, mx = -Infinity;
+        for (let i = 0; i < vals.length; i++) { const x = +vals[i]; if (x < mn) mn = x; if (x > mx) mx = x; }
+        c.min = c.type === 'date' ? new Date(mn) : mn; c.max = c.type === 'date' ? new Date(mx) : mx;
+      }
     });
   }
 
@@ -285,5 +324,5 @@ const SDParser = (() => {
     return ds.columns.length && ds.rows.length ? ds : null;
   }
 
-  return { norm, blank, parseNumber, parseDate, ymd, fmtDate, parseText, parseFile, validateFile, combine, refreshStats, EXTS };
+  return { norm, blank, parseNumber, parseDate, ymd, fmtDate, parseText, parseFile, parseFileAsync, validateFile, combine, refreshStats, EXTS, MAX_MB };
 })();
