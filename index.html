@@ -6,7 +6,7 @@
 <title>Smart Dash Studio — Transforme informações em decisões</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -19,6 +19,7 @@
     <button data-nav="home">Criar Dashboards</button><button data-nav="explore">Explorar Dados</button><button data-nav="results">Meus Dashboards</button>
   </nav>
   <div class="top-actions">
+    <button class="btn ghost toggle" id="btnChat" aria-pressed="true" hidden title="Ligar ou desligar o chat de comandos"><i class="dot-s"></i><span>Chat</span></button>
     <button class="btn ghost" id="btnNew" hidden>Nova análise</button>
     <button class="btn ghost" id="btnPanel" hidden>Personalizar</button>
   </div>
@@ -42,6 +43,11 @@
     </div>
     <div class="chips" id="suggestions" aria-label="Sugestões de análise"></div>
     <div id="historyBox" class="history" hidden><h2>Histórico da sessão</h2><div class="chips" id="history"></div></div>
+    <div class="pillars">
+      <div><b>Leitura inteligente</b><span>Reconhece datas, números, categorias, responsáveis e status.</span></div>
+      <div><b>Visão estratégica</b><span>Pareto, tendência, metas, riscos e ações sugeridas.</span></div>
+      <div><b>Explorar e exportar</b><span>Tabela dinâmica, gráficos redimensionáveis, PNG, PDF e CSV.</span></div>
+    </div>
     <p class="foot">Interpretação local por regras. Seus dados são processados no navegador e não são enviados a nenhum servidor.</p>
   </section>
 
@@ -51,6 +57,7 @@
     <div class="res-top">
       <nav class="tabs" id="tabs" role="tablist"></nav>
       <div class="res-actions">
+        <button class="btn ghost" id="btnPresent" title="Exibir em tela cheia">Apresentar</button>
         <button class="btn ghost" id="btnCopyDash">Copiar dashboard</button>
         <div class="menu">
           <button class="btn ghost" id="btnExport" aria-haspopup="true">Exportar</button>
@@ -70,7 +77,7 @@
       <div id="board" class="board"></div>
     </div>
     <div id="insightsView" hidden></div>
-    <div class="dock">
+    <div class="dock" id="dock">
       <div class="chatlog" id="chatlog" aria-live="polite"></div>
       <form class="chatform" id="chatForm" autocomplete="off">
         <input id="cmd" type="text" placeholder='Peça ajustes: "Mude todos os gráficos para tons de azul", "Mostre apenas outubro"…' aria-label="Comando">
@@ -93,8 +100,9 @@
       <div class="row mt"><label for="pBg">Fundo</label><input type="color" id="pBg"><button class="link" id="pBgReset">padrão</button></div></section>
     <section><h3>Gráficos</h3>
       <label class="check"><input type="checkbox" id="pLegend"> Exibir legendas</label>
+      <label class="check"><input type="checkbox" id="pLabels"> Rótulos de valores nas barras</label>
       <label class="fld">Formato dos gráficos
-        <select id="pFormat"><option value="auto">Automático (por dado)</option><option value="bar">Barras</option><option value="hbar">Barras horizontais</option><option value="line">Linhas</option><option value="area">Área</option><option value="doughnut">Rosca</option><option value="pie">Pizza</option></select></label>
+        <select id="pFormat"><option value="auto">Automático (por dado)</option><option value="bar">Barras</option><option value="hbar">Barras horizontais</option><option value="line">Linhas</option><option value="area">Área</option><option value="doughnut">Rosca</option><option value="pie">Pizza</option><option value="radar">Radar</option><option value="polar">Área polar</option></select></label>
       <label class="fld">Tamanho dos cards
         <select id="pSize"><option value="compact">Compacto</option><option value="normal">Normal</option><option value="large">Grande</option></select></label></section>
     <section><h3>Layout</h3>
@@ -102,6 +110,10 @@
       <button class="btn ghost wide" id="pResetLayout" style="margin:0">Restaurar tamanhos originais</button></section>
     <section><h3>Título do dashboard</h3><input type="text" id="pTitle" maxlength="80" aria-label="Título do dashboard"></section>
     <section><h3>Visualizações</h3><p class="muted small">Renomeie, escolha a cor e reordene.</p><div id="pWidgets"></div></section>
+    <section><h3>Configuração</h3>
+      <p class="muted small">Salve ou carregue tema, paleta e layouts em um arquivo.</p>
+      <div class="row"><button class="btn ghost" id="pExportCfg">Exportar</button><button class="btn ghost" id="pImportCfg">Importar</button></div>
+      <input type="file" id="cfgFile" accept=".json,application/json" hidden></section>
     <button class="btn ghost wide" id="pReset">Restaurar tema original</button>
   </div>
 </aside>

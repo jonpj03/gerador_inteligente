@@ -3,9 +3,9 @@ const SDCommands = (() => {
   const N = SDParser.norm;
   const COLORS = { azul: 'Azul', verde: 'Verde', laranja: 'Laranja', roxo: 'Roxo', violeta: 'Roxo', cinza: 'Grafite', grafite: 'Grafite', turquesa: 'Turquesa', teal: 'Turquesa', magenta: 'Magenta', corporativo: 'Corporativo', rosa: 'Magenta', multicor: 'Multicor', colorido: 'Multicor' };
   const EXTRA = { vermelho: '#C62828', amarelo: '#F9A825', marrom: '#6D4C41' };
-  const TYPES = [['barras horizontais', 'hbar'], ['barra horizontal', 'hbar'], ['rosca', 'doughnut'], ['donut', 'doughnut'], ['pizza', 'pie'], ['colunas', 'bar'], ['coluna', 'bar'], ['barras', 'bar'], ['barra', 'bar'], ['linhas', 'line'], ['linha', 'line'], ['area', 'area']];
-  const TNAME = { bar: 'barras', hbar: 'barras horizontais', doughnut: 'rosca', pie: 'pizza', line: 'linha', area: 'área' };
-  const TABS = { executivo: 'executive', operacional: 'operational', analitico: 'analytical', personalizado: 'custom', insights: 'insights' };
+  const TYPES = [['barras horizontais', 'hbar'], ['barra horizontal', 'hbar'], ['rosca', 'doughnut'], ['donut', 'doughnut'], ['pizza', 'pie'], ['colunas', 'bar'], ['coluna', 'bar'], ['barras', 'bar'], ['barra', 'bar'], ['linhas', 'line'], ['linha', 'line'], ['area', 'area'], ['radar', 'radar'], ['polar', 'polar']];
+  const TNAME = { bar: 'barras', hbar: 'barras horizontais', doughnut: 'rosca', pie: 'pizza', line: 'linha', area: 'área', radar: 'radar', polar: 'polar' };
+  const TABS = { executivo: 'executive', operacional: 'operational', analitico: 'analytical', estrategico: 'strategic', personalizado: 'custom', insights: 'insights' };
 
   const typeIn = s => { for (const [w, t] of TYPES) { const i = s.indexOf(w); if (i > -1) return { t, i, w }; } return null; };
   const ok = msg => ({ ok: true, msg }), no = msg => ({ ok: false, msg });
@@ -28,6 +28,11 @@ const SDCommands = (() => {
       if (/(tema|modo|fundo) (escuro|dark)/.test(n)) { c.setTheme('dark'); return ok('Tema escuro ativado.'); }
       if (/(tema|modo|fundo) (claro|light)/.test(n)) { c.setTheme('light'); return ok('Tema claro ativado.'); }
       return null;
+    },
+    (n, c) => {
+      if (!/rotulo|valores nos graficos/.test(n)) return null;
+      if (/(ocult|esconda|remov|tire|sem|desat)/.test(n)) { c.setLabels(false); return ok('Rótulos de valores ocultos.'); }
+      c.setLabels(true); return ok('Rótulos de valores exibidos nas barras.');
     },
     (n, c) => {
       if (!/legenda/.test(n)) return null;
@@ -100,7 +105,7 @@ const SDCommands = (() => {
       c.goTab('custom'); return ok(`Comparação por ${dim.name} adicionada ao Dashboard Personalizado.`);
     },
     (n, c) => {
-      const m = n.match(/(?:abr\w*|ir para|va para|mostr\w*|exib\w*)\s+(?:o |a )?(?:dashboard |painel |aba )(executivo|operacional|analitico|personalizado)|\b(insights)\b/);
+      const m = n.match(/(?:abr\w*|ir para|va para|mostr\w*|exib\w*)\s+(?:o |a )?(?:dashboard |painel |aba )(executivo|operacional|analitico|estrategico|personalizado)|\b(insights)\b/);
       if (!m) return null;
       const t = m[1] || m[2]; c.goTab(TABS[t]); return ok(`Abrindo ${t === 'insights' ? 'Insights & Melhorias' : 'Dashboard ' + t}.`);
     }

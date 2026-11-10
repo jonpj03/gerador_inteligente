@@ -59,5 +59,5 @@ const SDExport = (() => {
     for (const r of rows) lines.push(ds.columns.map(c => f(r[c.name])).join(';'));
     download(new Blob(['\uFEFF' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' }), slug(name || 'dados') + '.csv');
   }
-  return { png, copy, pdf, csv, slug };
+  return { png, copy, pdf, csv, slug, download };
 })();

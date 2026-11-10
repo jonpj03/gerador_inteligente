@@ -13,12 +13,30 @@ const SDRender = (() => {
     send: ic('<line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/>'),
     up: ic('<polyline points="18 15 12 9 6 15"/>'), down: ic('<polyline points="6 9 12 15 18 9"/>')
   };
+  const valueLabels = {
+    id: 'valueLabels',
+    afterDatasetsDraw(chart, args, o) {
+      if (!o || !o.show) return;
+      const ctx = chart.ctx, horiz = chart.options.indexAxis === 'y';
+      ctx.save(); ctx.font = '600 11px Inter, sans-serif'; ctx.fillStyle = o.color;
+      chart.data.datasets.forEach((ds, di) => {
+        const meta = chart.getDatasetMeta(di);
+        if (meta.hidden || (ds.type || chart.config.type) !== 'bar') return;
+        meta.data.forEach((el, i) => {
+          const v = ds.data[i]; if (v == null) return; const t = o.fmt(v);
+          if (horiz) { ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(t, el.x + 4, el.y); }
+          else { ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'; ctx.fillText(t, el.x, el.y - 3); }
+        });
+      });
+      ctx.restore();
+    }
+  };
   let charts = [];
   const dropChart = c => { if (!c) return; try { c.destroy(); } catch (e) { /* ok */ } charts = charts.filter(x => x !== c); };
   const destroy = () => { charts.forEach(c => { try { c.destroy(); } catch (e) { /* ok */ } }); charts = []; };
   const dispose = el => { dropChart(el && el._ch); };
   const isSeries = w => w.kind === 'chart' && (w.data === 'group' || w.data === 'time');
-  const isMatrix = w => w.kind === 'chart' && w.data === 'stacked';
+  const isMatrix = w => w.kind === 'chart' && (w.data === 'stacked' || w.data === 'compare');
   const fmtT = SDEngine.fmt;
   const MATRIX = ['stacked', 'sbar', 'bar', 'hbar', 'line'];
 
@@ -71,7 +89,7 @@ const SDRender = (() => {
     const P = st.prefs, dark = P.theme === 'dark';
     const txt = dark ? '#E8EAED' : '#202124', grid = dark ? 'rgba(255,255,255,.08)' : 'rgba(0,0,0,.06)';
     const pal = w.color ? SDEngine.makePalette(w.color) : P.palette;
-    const pie = vis === 'doughnut' || vis === 'pie', horiz = vis === 'hbar' || vis === 'sbar', stacked = vis === 'stacked' || vis === 'sbar';
+    const pie = vis === 'doughnut' || vis === 'pie' || vis === 'polar', horiz = vis === 'hbar' || vis === 'sbar', stacked = vis === 'stacked' || vis === 'sbar';
     const [r, g, b] = SDEngine.hexRgb(pal[0]);
     let type = vis, data;
     if (w.data === 'scatter') {
@@ -81,26 +99,35 @@ const SDRender = (() => {
       type = vis === 'line' ? 'line' : 'bar';
       const cols = colorsFor(d.datasets.length, pal);
       data = { labels: d.labels, datasets: d.datasets.map((s, i) => ({ ...s, backgroundColor: cols[i], borderColor: cols[i], borderWidth: type === 'line' ? 2.5 : 0, borderRadius: type === 'bar' && !stacked ? 3 : 0, tension: .3, pointRadius: type === 'line' ? 3 : 0, fill: false })) };
+    } else if (w.data === 'pareto') {
+      type = 'bar';
+      data = { labels: d.labels, datasets: [{ ...d.datasets[0], type: 'bar', backgroundColor: pal[0], borderRadius: 4, yAxisID: 'y', order: 2 }, { type: 'line', label: '% acumulado', data: d.cum, yAxisID: 'y1', borderColor: pal[1], backgroundColor: pal[1], borderWidth: 2.5, tension: .2, pointRadius: 3, order: 1 }] };
     } else {
       const ds0 = d.datasets[0];
       if (vis === 'hbar') type = 'bar';
       if (vis === 'area') type = 'line';
-      const bg = pie ? colorsFor(d.labels.length, pal) : (type === 'line' ? `rgba(${r},${g},${b},.15)` : pal[0]);
-      data = { labels: d.labels, datasets: [{ ...ds0, backgroundColor: bg, borderColor: pie ? (dark ? '#1c1e23' : '#fff') : pal[0], borderWidth: pie ? 2 : type === 'line' ? 2.5 : 0, borderRadius: type === 'bar' ? 4 : 0, fill: type === 'line', tension: .3, pointRadius: type === 'line' ? 3 : 0, pointBackgroundColor: pal[0] }] };
+      if (vis === 'radar') type = 'radar';
+      const bg = pie ? colorsFor(d.labels.length, pal) : (type === 'line' || type === 'radar' ? `rgba(${r},${g},${b},.18)` : pal[0]);
+      data = { labels: d.labels, datasets: [{ ...ds0, backgroundColor: bg, borderColor: pie ? (dark ? '#1c1e23' : '#fff') : pal[0], borderWidth: pie ? 2 : type === 'line' ? 2.5 : 0, borderRadius: type === 'bar' ? 4 : 0, fill: type === 'line' || type === 'radar', tension: .3, pointRadius: type === 'line' || type === 'radar' ? 3 : 0, pointBackgroundColor: pal[0] }] };
+      if (w.data === 'time' && d.datasets.length > 1) d.datasets.slice(1).forEach((x, i) => data.datasets.push({ ...x, type: 'line', borderColor: pal[(i + 1) % pal.length], backgroundColor: pal[(i + 1) % pal.length], borderDash: /Média móvel/.test(x.label) ? [] : [6, 4], borderWidth: 2, pointRadius: 0, fill: false, tension: .3 }));
     }
     const multi = isMatrix(w);
     const opts = {
       responsive: true, maintainAspectRatio: false, devicePixelRatio: dpr,
       animation: st.animate ? { duration: 500 } : false,
       plugins: {
-        legend: { display: P.legend && (pie || multi), position: pie ? 'right' : 'bottom', labels: { color: txt, boxWidth: 12, usePointStyle: true, font: { size: 11 } } },
+        legend: { display: P.legend && (pie || multi || w.data === 'pareto' || (d.datasets && d.datasets.length > 1)), position: pie ? 'right' : 'bottom', labels: { color: txt, boxWidth: 12, usePointStyle: true, font: { size: 11 } } },
         tooltip: { callbacks: {
           title: items => items.length && items[0].label !== undefined ? String(items[0].label) : '',
-          label: c => { if (w.data === 'scatter') return `${fmtT(c.parsed.x, d.fmt)} / ${fmtT(c.parsed.y, d.fmt)}`; const v = c.parsed && typeof c.parsed === 'object' ? (horiz ? c.parsed.x : c.parsed.y) : c.parsed; const pre = pie ? '' : (c.dataset.label ? c.dataset.label + ': ' : ''); return pre + fmtT(v, d.fmt); }
+          label: c => { if (c.dataset.yAxisID === 'y1') return '% acumulado: ' + fmtT(c.parsed.y, 'percent'); if (w.data === 'scatter') return `${fmtT(c.parsed.x, d.fmt)} / ${fmtT(c.parsed.y, d.fmt)}`; const v = c.parsed && typeof c.parsed === 'object' ? (horiz ? c.parsed.x : c.parsed.y) : c.parsed; const pre = pie ? '' : (c.dataset.label ? c.dataset.label + ': ' : ''); return pre + fmtT(v, d.fmt); }
         } }
       }
     };
-    if (!pie) {
+    const nLab = (d.labels || []).length;
+    opts.plugins.valueLabels = { show: !!P.labels && type === 'bar' && !stacked && nLab > 0 && nLab <= 150, color: txt, fmt: v => fmtT(v, d.fmt, true) };
+    if (opts.plugins.valueLabels.show) opts.layout = { padding: horiz ? { right: 56 } : { top: 18 } };
+    if (vis === 'radar') opts.scales = { r: { ticks: { color: txt, backdropColor: 'transparent', font: { size: 10 } }, grid: { color: grid }, angleLines: { color: grid }, pointLabels: { color: txt, font: { size: 11 } } } };
+    else if (!pie) {
       const ax = { ticks: { color: txt, font: { size: 11 }, maxRotation: 45 }, grid: { color: grid }, border: { display: false } };
       const val = { ...ax, beginAtZero: type !== 'scatter', ticks: { ...ax.ticks, callback: v => fmtT(v, d.fmt, true) } };
       if (horiz) {
@@ -108,8 +135,9 @@ const SDRender = (() => {
         opts.scales = { x: { ...val, stacked }, y: { ...ax, stacked, grid: { display: false }, ticks: { color: txt, font: { size: 11 }, autoSkip: false, callback(v) { return wrap(this.getLabelForValue(v), 28); } } } };
       } else if (w.data === 'scatter') opts.scales = { x: { ...val, title: { display: true, text: d.xl, color: txt } }, y: { ...val, title: { display: true, text: d.yl, color: txt } } };
       else opts.scales = { x: { ...ax, grid: { display: false }, stacked, ticks: { ...ax.ticks, autoSkip: (d.labels || []).length > 40 } }, y: { ...val, stacked } };
+      if (w.data === 'pareto') opts.scales.y1 = { position: 'right', min: 0, max: 100, grid: { display: false }, border: { display: false }, ticks: { color: txt, font: { size: 11 }, callback: v => v + '%' } };
     } else if (vis === 'doughnut') opts.cutout = '62%';
-    const ch = new Chart(canvas, { type: pie ? vis : type, data, options: opts });
+    const ch = new Chart(canvas, { type: vis === 'polar' ? 'polarArea' : (pie ? vis : type), data, options: opts, plugins: [valueLabels] });
     charts.push(ch); return ch;
   }
 
@@ -131,6 +159,7 @@ const SDRender = (() => {
   }
   function noteOf(d, w) {
     const out = [];
+    if (d.n80) out.push(`${d.n80} de ${d.n} categorias somam 80% do total (% acumulado calculado sobre todas)`);
     if (d.total != null) {
       if (d.q) out.push(`Busca: ${d.matched} de ${d.total} categorias`);
       if (d.others) out.push(`Top ${d.shown} + ${d.others} categorias agrupadas em "Outros"`);
@@ -162,7 +191,7 @@ const SDRender = (() => {
     if (!rows.length) { b.innerHTML = '<p class="empty">Sem dados para os filtros atuais.</p>'; return el; }
 
     if (w.kind === 'chart') {
-      const tb = isMatrix(w) || w.data === 'group';
+      const tb = isMatrix(w) || w.data === 'group' || w.data === 'pareto';
       b.innerHTML = (tb ? TB(w) : '') + '<div class="cv"></div><p class="cnote muted small"></p>';
       const cv = b.querySelector('.cv'), note = b.querySelector('.cnote');
       const draw = () => {
@@ -200,6 +229,8 @@ const SDRender = (() => {
       case 'datatable': b.innerHTML = dataTable(d); break;
       case 'highlights': case 'bottlenecks':
         b.innerHTML = d.items.length ? `<ul class="hl">${d.items.map(i => `<li>${esc(i)}</li>`).join('')}</ul>` : '<p class="empty">Ainda não há destaques calculáveis com estes dados.</p>'; break;
+      case 'strategy':
+        b.innerHTML = d.sections.length ? `<div class="strat">${d.sections.map(s => `<div class="sg sg-${s.key}"><h4><i></i>${esc(s.title)}</h4><ul>${s.items.map(i => `<li>${esc(i)}</li>`).join('')}</ul></div>`).join('')}</div><p class="muted small strat-n">Leituras geradas por regras sobre os dados e filtros atuais. São hipóteses para apoiar a decisão, não conclusões: valide com o contexto do negócio.</p>` : '<p class="empty">Dados insuficientes para gerar leituras estratégicas.</p>'; break;
       case 'notice': b.innerHTML = `<p class="notice">${esc(w.text)}</p>`; break;
     }
     if (w.h && !opt.expanded && w.kind !== 'kpi') { const tw = b.querySelector('.tbl-wrap'); if (tw) tw.style.maxHeight = Math.max(80, w.h - 40) + 'px'; else { b.style.maxHeight = w.h + 'px'; b.style.overflow = 'auto'; } }

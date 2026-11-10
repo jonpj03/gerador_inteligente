@@ -132,10 +132,18 @@ const SDEngine = (() => {
     return w;
   }
 
+  function buildStrategic(p) {
+    const w = [], pm = p.primaryMeasure, agg = pm ? aggFor(pm) : 'count', d = p.primaryDim;
+    w.push(W({ kind: 'strategy', title: 'Resumo estratégico', span: 12 }));
+    if (d && agg !== 'avg') w.push(W({ kind: 'chart', data: 'pareto', chart: 'pareto', title: `Pareto: ${cap(mTitle(pm, agg))} por ${d.name}`, m: pm && pm.name, agg, dim: d.name, limit: 20, span: 12 }));
+    if (p.date) w.push(W({ kind: 'chart', data: 'time', chart: 'line', title: 'Tendência de ' + mTitle(pm, agg), m: pm && pm.name, agg, date: p.date.name, ma: 3, trend: true, span: p.target && d ? 6 : 12 }));
+    if (p.target && pm && p.target !== pm && d) w.push(W({ kind: 'chart', data: 'compare', chart: 'bar', title: `Realizado × meta por ${d.name}`, m: pm.name, m2: p.target.name, agg: 'sum', dim: d.name, span: p.date ? 6 : 12 }));
+    return w;
+  }
   function buildAll(p) {
     const ex = buildExecutive(p);
     const custom = ex.filter(x => x.kind === 'kpi' || x.kind === 'chart').slice(0, 5).map(x => ({ ...x, id: nid() }));
-    return { executive: ex, operational: buildOperational(p), analytical: buildAnalytical(p), custom };
+    return { executive: ex, operational: buildOperational(p), analytical: buildAnalytical(p), strategic: buildStrategic(p), custom };
   }
   const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
 
@@ -241,7 +249,26 @@ const SDEngine = (() => {
   function chartData(w, rows, p, ft, opts) {
     if (w.data === 'time') {
       const { pts } = timeSeries(rows, w.date, w.m, w.agg, w.grain);
-      return { labels: pts.map(x => x.label), datasets: [{ label: w.m ? `${w.agg === 'avg' ? 'Média' : 'Total'} de ${w.m}` : 'Registros', data: pts.map(x => x.v) }], fmt: ft };
+      const ds = [{ label: w.m ? `${w.agg === 'avg' ? 'Média' : 'Total'} de ${w.m}` : 'Registros', data: pts.map(x => x.v) }];
+      if (w.ma && pts.length >= w.ma) { const k = +w.ma; ds.push({ label: `Média móvel (${k})`, data: pts.map((_, i) => { if (i < k - 1) return null; let s = 0, n = 0; for (let j = i - k + 1; j <= i; j++) if (pts[j].v != null) { s += pts[j].v; n++; } return n ? s / n : null; }) }); }
+      if (w.trend && pts.length >= 3) {
+        const xy = pts.map((x, i) => [i, x.v]).filter(x => x[1] != null), n = xy.length;
+        if (n >= 3) { const sx = xy.reduce((a, x) => a + x[0], 0), sy = xy.reduce((a, x) => a + x[1], 0), sxy = xy.reduce((a, x) => a + x[0] * x[1], 0), sxx = xy.reduce((a, x) => a + x[0] * x[0], 0), den = n * sxx - sx * sx; if (den) { const b = (n * sxy - sx * sy) / den, a = (sy - b * sx) / n; ds.push({ label: 'Tendência linear', data: pts.map((_, i) => a + b * i) }); } }
+      }
+      return { labels: pts.map(x => x.label), datasets: ds, fmt: ft };
+    }
+    if (w.data === 'pareto') {
+      const items = groupRows(rows, w.dim, w.m, w.agg).filter(x => x.v != null && x.v > 0).map(x => ({ k: x.k, label: String(x.k), v: x.v })).sort((a, b) => b.v - a.v);
+      const tot = items.reduce((a, x) => a + x.v, 0); let c = 0, n80 = 0; const cum = new Map();
+      items.forEach(x => { c += x.v; cum.set(x.k, c / tot * 100); if (!n80 && c / tot >= .8) n80 = cum.size; });
+      const r = pickRows(items, { ...w, sort: 'desc' }, false);
+      return { labels: r.g.map(x => x.label), datasets: [{ label: w.m || 'Registros', data: r.g.map(x => x.v) }], cum: r.g.map(x => cum.get(x.k)), fmt: ft, total: r.total, matched: r.matched, shown: r.g.length, others: 0, q: r.q, n80, n: items.length };
+    }
+    if (w.data === 'compare') {
+      const a = groupRows(rows, w.dim, w.m, w.agg), bm = new Map(groupRows(rows, w.dim, w.m2, w.agg).map(x => [x.k, x.v]));
+      const items = a.filter(x => x.v != null).map(x => ({ k: x.k, label: String(x.k), v: x.v, v2: bm.get(x.k) || 0 }));
+      const r = pickRows(items, w, false);
+      return { labels: r.g.map(x => x.label), datasets: [{ label: w.m, data: r.g.map(x => x.v) }, { label: w.m2, data: r.g.map(x => x.v2) }], fmt: ft, total: r.total, matched: r.matched, shown: r.g.length, others: 0, q: r.q };
     }
     if (w.data === 'group') {
       const items = groupRows(rows, w.dim, w.m, w.agg).filter(x => x.v != null).map(x => ({ k: x.k, label: String(x.k), v: x.v }));
@@ -346,6 +373,68 @@ const SDEngine = (() => {
     return out;
   }
 
+  function strategy(rows, p) {
+    const good = [], risk = [], opp = [], act = [];
+    if (!rows.length) return [];
+    const pm = p.primaryMeasure, agg = pm ? aggFor(pm) : 'count', ft = pm ? pm.type : 'number', mn = pm ? pm.name : 'registros', d = p.primaryDim;
+    const pc = x => fmt(x * 100, 'percent');
+    if (d) {
+      const g = groupRows(rows, d.name, pm && pm.name, agg).filter(x => x.v != null && x.v > 0).sort((a, b) => b.v - a.v);
+      const tot = g.reduce((a, x) => a + x.v, 0);
+      if (g.length >= 3 && agg !== 'avg' && tot > 0) {
+        const share = g[0].v / tot; let cum = 0, n80 = 0;
+        for (const x of g) { cum += x.v; n80++; if (cum / tot >= .8) break; }
+        if (share >= .4) { risk.push(`Concentração: ${g[0].k} responde por ${pc(share)} de ${mn} em ${d.name}.`); act.push(`Avaliar a dependência de ${g[0].k} e definir um plano para reduzir o risco de concentração.`); }
+        else good.push(`Distribuição equilibrada: a maior categoria de ${d.name} (${g[0].k}) tem ${pc(share)} do total de ${mn}.`);
+        const f = n80 / g.length;
+        if (g.length >= 6) (f <= .3 ? opp : good).push(`${n80} de ${g.length} categorias de ${d.name} (${pc(f)}) respondem por 80% de ${mn}${f <= .3 ? ' — poucos itens concentram o resultado (princípio de Pareto).' : '.'}`);
+        const avg = tot / g.length, low = g.filter(x => x.v < .5 * avg);
+        if (g.length >= 6 && low.length >= 2) { opp.push(`${low.length} categorias de ${d.name} estão abaixo de 50% da média — espaço para evolução.`); act.push(`Investigar o que diferencia as ${low.length} categorias abaixo de 50% da média (menores: ${low.slice(-3).map(x => x.k).join(', ')}).`); }
+      }
+    }
+    if (p.date) {
+      const { g, pts } = timeSeries(rows, p.date.name, pm && pm.name, agg, 'auto');
+      const v = pts.map(x => x.v).filter(x => x != null);
+      if (g === 'month' && v.length >= 4) {
+        const k = Math.min(3, Math.floor(v.length / 2)), mean = a => a.reduce((s, x) => s + x, 0) / a.length;
+        const last = mean(v.slice(-k)), prev = mean(v.slice(-2 * k, -k));
+        if (prev) {
+          const ch = (last - prev) / Math.abs(prev);
+          if (ch >= .1) good.push(`Crescimento: a média dos últimos ${k} meses de ${mn} está ${pc(ch)} acima dos ${k} meses anteriores.`);
+          else if (ch <= -.1) { risk.push(`Queda: a média dos últimos ${k} meses de ${mn} está ${pc(-ch)} abaixo dos ${k} meses anteriores.`); act.push('Analisar as causas da queda recente (sazonalidade, capacidade ou demanda) antes de definir metas.'); }
+          else good.push(`Estabilidade: a média dos últimos ${k} meses de ${mn} variou ${pc(Math.abs(ch))} frente ao período anterior.`);
+        }
+        const m = mean(v), sd = Math.sqrt(mean(v.map(x => (x - m) * (x - m))));
+        if (m > 0 && sd / m > .5) { risk.push(`Alta volatilidade: o desvio padrão mensal de ${mn} equivale a ${pc(sd / m)} da média.`); act.push('Investigar picos e vales mensais para entender o que causa a oscilação.'); }
+      }
+    }
+    if (pm) {
+      const vs = rows.map(r => r[pm.name]).filter(x => typeof x === 'number').sort((a, b) => a - b);
+      if (vs.length >= 8) {
+        const q = x => vs[Math.floor((vs.length - 1) * x)], iq = q(.75) - q(.25);
+        const out = iq ? vs.filter(x => x < q(.25) - 3 * iq || x > q(.75) + 3 * iq) : [];
+        if (out.length) { risk.push(`${out.length} valor(es) atípico(s) em ${pm.name} (extremos: ${fmt(out[0], ft)} a ${fmt(out[out.length - 1], ft)}).`); act.push(`Validar os ${out.length} registros atípicos de ${pm.name}: erro de digitação ou caso excepcional?`); }
+      }
+    }
+    if (p.status) {
+      const ok = rows.filter(r => r[p.status.name] != null);
+      if (ok.some(r => isDone(r[p.status.name]))) {
+        const open = ok.filter(r => !isDone(r[p.status.name])), rate = open.length / ok.length;
+        if (rate >= .5) { risk.push(`${pc(rate)} dos registros ainda estão em aberto.`); }
+        else good.push(`${pc(1 - rate)} dos registros já estão concluídos.`);
+        if (open.length && p.person) { const bp = groupRows(open, p.person.name, null, 'count').sort((a, b) => b.n - a.n)[0]; if (bp && bp.n / open.length >= .25 && groupRows(open, p.person.name, null, 'count').length >= 3) act.push(`Priorizar ou redistribuir os itens em aberto de ${bp.k} (${bp.n} de ${open.length}, ${pc(bp.n / open.length)} do pendente).`); }
+      }
+    }
+    if (p.target && pm && p.target !== pm) {
+      const a = aggregate(rows, pm.name, 'sum'), t = aggregate(rows, p.target.name, 'sum');
+      if (t) {
+        (a / t >= 1 ? good : risk).push(`Realizado de ${pm.name} equivale a ${pc(a / t)} de "${p.target.name}".`);
+        if (d) { const g = groupRows(rows, d.name, pm.name, 'sum'), tg = new Map(groupRows(rows, d.name, p.target.name, 'sum').map(x => [x.k, x.v])); const below = g.filter(x => tg.get(x.k) && x.v < tg.get(x.k)); if (below.length) act.push(`Acompanhar de perto as ${below.length} categorias de ${d.name} abaixo da meta.`); }
+      }
+    }
+    return [['good', 'Destaques', good], ['risk', 'Riscos e atenção', risk], ['opp', 'Oportunidades', opp], ['act', 'Ações sugeridas', act]].filter(x => x[2].length).map(([key, title, items]) => ({ key, title, items }));
+  }
+
   function compute(w, rows, p, opts) {
     rows = applyWhere(rows, w.where, p);
     const mc = w.m ? colOf(p, w.m) : null, ft = mc ? mc.type : 'number';
@@ -370,6 +459,7 @@ const SDEngine = (() => {
         return { head, body, numFrom: 1 };
       }
       case 'datatable': return { head: p.ds.columns.map(c => c.name), cols: p.ds.columns, rows: rows.slice(0, 100), total: rows.length };
+      case 'strategy': return { sections: strategy(rows, p) };
       case 'highlights': return { items: highlights(rows, p, w) };
       case 'bottlenecks': return { items: p.status ? bottlenecks(rows, p) : [] };
       default: return {};
@@ -405,5 +495,5 @@ const SDEngine = (() => {
     return `Li ${p.ds.rows.length} linhas e ${c.length} colunas. Identifiquei: ${parts.join('; ') || 'poucas dimensões analisáveis'}.`;
   }
 
-  return { crosstab, aggregate, applyWhere, rowsFor, RX, MFULL, MPT, MEAS, isDone, isFin, aggFor, nid, cap, makePalette, withL, soft, hexRgb, PRESETS, fmt, profile, buildAll, buildExecutive, compute, applyFilters, describe, colOf, W, shade: withL };
+  return { buildStrategic, crosstab, aggregate, applyWhere, rowsFor, RX, MFULL, MPT, MEAS, isDone, isFin, aggFor, nid, cap, makePalette, withL, soft, hexRgb, PRESETS, fmt, profile, buildAll, buildExecutive, compute, applyFilters, describe, colOf, W, shade: withL };
 })();

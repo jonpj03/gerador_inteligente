@@ -30,3 +30,9 @@ Também funciona abrindo `index.html` localmente. Chart.js, SheetJS, html2canvas
 - **Dimensionamento:** alças nas bordas/canto dos cards, tamanhos predefinidos e largura/altura em px (botão ⚙), ajuste automático ao conteúdo, rolagem interna, botão Expandir, busca, ordenação e Todos/Top 10/20/50 nos gráficos de categorias. Layout salvo no navegador.
 - **Exportação de gráficos longos:** exporta todo o conteúdo; acima de 8.000 px de altura gera PNG/PDF em partes.
 - **Explorar Dados:** Linhas, Colunas, Valores e Filtros (arrastar ou menus), totais corretos, sugestões, alertas, CSV e *Gerar dashboard desta análise* (aba "Análise" em Meus Dashboards).
+
+## Versão 3
+- **Chat ligado/desligado:** botão no topo (aba Meus Dashboards); a escolha fica salva.
+- **Aba Estratégico:** resumo com destaques, riscos, oportunidades e ações sugeridas (por regras, sobre os dados e filtros atuais), Pareto 80/20, tendência com média móvel e linha linear, e realizado × meta quando há coluna de meta.
+- **Mais flexibilidade:** gráficos Radar e Área polar, rótulos de valores nas barras, modo Apresentar (tela cheia), exportar/importar configuração (tema, paleta e layouts) em JSON.
+- **Visual renovado** mantendo a identidade branca e magenta.
