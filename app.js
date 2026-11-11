@@ -131,12 +131,12 @@
   function showResults() { setView('results'); }
   function goHome() { setView('home'); }
   function setView(v) {
-    if (v !== 'home' && !S.ds) { toast('Importe e gere os dados primeiro (Criar Dashboards).', true); v = 'home'; }
+    if (v !== 'home' && v !== 'gallery' && !S.ds) { toast('Importe e gere os dados primeiro (Criar Dashboards).', true); v = 'home'; }
     S.view = v;
-    $('#viewHome').hidden = v !== 'home'; $('#viewExplore').hidden = v !== 'explore'; $('#viewResults').hidden = v !== 'results';
+    $('#viewHome').hidden = v !== 'home'; $('#viewExplore').hidden = v !== 'explore'; $('#viewGallery').hidden = v !== 'gallery'; $('#viewResults').hidden = v !== 'results';
     $('#btnNew').hidden = v === 'home'; $('#btnPanel').hidden = v !== 'results'; $('#btnChat').hidden = v !== 'results'; if (v !== 'results') $('#panel').hidden = true;
     $$('#mainnav button').forEach(b => b.setAttribute('aria-current', b.dataset.nav === v ? 'page' : 'false'));
-    if (v === 'home') renderHome(); if (v === 'explore') SDExplore.refresh(); if (v === 'results') renderAll(true);
+    if (v === 'home') renderHome(); if (v === 'explore') SDExplore.refresh(); if (v === 'gallery') SDGallery.render(); if (v === 'results') renderAll(true);
     window.scrollTo(0, 0);
   }
   function renderAll(anim) { renderTabs(); renderBanner(); renderFilters(); renderBuilder(); renderBoard(anim); syncPanel(); renderChat(); }
@@ -319,9 +319,9 @@
   function editWidget(w) {
     SDEditor.open({ w, p: S.profile, onSave: nw => { const arr = S.dash[S.tab], i = arr.findIndex(x => x.id === w.id); if (i >= 0) arr[i] = nw; renderBoard(false); renderPanelWidgets(); } });
   }
-  function addViz() {
-    if (S.tab === 'insights') return toast('Abra um dashboard para adicionar visualizações.', true);
-    SDEditor.open({ w: null, p: S.profile, onSave: nw => {
+  function addViz(type) {
+    if (S.tab === 'insights') { S.tab = 'custom'; renderTabs(); renderFilters(); renderBoard(false); }
+    SDEditor.open({ w: null, p: S.profile, type, onSave: nw => {
       S.dash[S.tab].push(nw); renderBoard(false); renderPanelWidgets(); toast('Visualização adicionada.');
       setTimeout(() => { const c = $(`.card[data-id="${nw.id}"]`); if (c) c.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 80);
     } });
@@ -341,7 +341,7 @@
     ['dragover', 'dragenter'].forEach(ev => comp.addEventListener(ev, e => { e.preventDefault(); comp.classList.add('drag'); }));
     ['dragleave', 'drop'].forEach(ev => comp.addEventListener(ev, e => { e.preventDefault(); comp.classList.remove('drag'); if (ev === 'drop' && e.dataTransfer.files.length) addFiles(e.dataTransfer.files); }));
     $('#mainnav').addEventListener('click', e => { const b = e.target.closest('[data-nav]'); if (b) setView(b.dataset.nav); });
-    $('#btnAddViz').addEventListener('click', addViz);
+    $('#btnAddViz').addEventListener('click', () => addViz());
     $('#btnChat').addEventListener('click', () => { S.prefs.chat = !S.prefs.chat; savePrefs(); applyTheme(); toast(S.prefs.chat ? 'Chat ligado.' : 'Chat desligado. Reative para enviar comandos.'); });
     $('#btnPresent').addEventListener('click', () => {
       if (S.tab === 'insights') return toast('Abra um dashboard para apresentar.', true);
@@ -461,6 +461,11 @@
     pw.addEventListener('click', e => { const b = e.target.closest('[data-mv]'); if (b) moveW(b.closest('.pw').dataset.w, +b.dataset.mv); });
   }
 
+  SDGallery.init({ palette: () => S.prefs.palette, onUse(type) {
+    if (!S.ds) { toast('Importe seus dados primeiro (Criar Dashboards). Depois volte aqui para criar este gráfico.', true); setView('home'); return; }
+    if (S.tab === 'insights') S.tab = 'custom';
+    setView('results'); addViz(type);
+  } });
   SDExplore.init({ ds: () => S.ds, profile: () => S.profile, rows: curRows, toast, filterNote: () => filterDesc().join(' · '),
     onDashboard(ws, title) { S.dash.analysis = ws; S.analysisTitle = title; S.tab = 'analysis'; setView('results'); toast('Dashboard gerado. Ele está em Meus Dashboards → Análise.'); } });
   applyTheme(); wire(); setView('home');

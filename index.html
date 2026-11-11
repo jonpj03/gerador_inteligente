@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Projeto 1.5</title>
+<title>Smart Dash Studio — Transforme informações em decisões</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet">
@@ -13,10 +13,10 @@
 <header class="topbar">
   <a class="brand" href="#" id="brand" aria-label="Smart Dash Studio — início">
     <svg viewBox="0 0 32 32" width="28" height="28" aria-hidden="true"><rect width="32" height="32" rx="9" fill="var(--brand)"/><rect x="7" y="16" width="4" height="9" rx="1.5" fill="#fff"/><rect x="14" y="10" width="4" height="15" rx="1.5" fill="#fff"/><rect x="21" y="13" width="4" height="12" rx="1.5" fill="#fff" opacity=".7"/></svg>
-    <span>Gerador inteligente</span>
+    <span>Smart Dash Studio</span>
   </a>
   <nav class="mainnav" id="mainnav" aria-label="Navegação principal">
-    <button data-nav="home">Criar Dashboards</button><button data-nav="explore">Explorar Dados</button><button data-nav="results">Meus Dashboards</button>
+    <button data-nav="home">Criar Dashboards</button><button data-nav="explore">Explorar Dados</button><button data-nav="results">Meus Dashboards</button><button data-nav="gallery">Gráficos</button>
   </nav>
   <div class="top-actions">
     <button class="btn ghost toggle" id="btnChat" aria-pressed="true" hidden title="Ligar ou desligar o chat de comandos"><i class="dot-s"></i><span>Chat</span></button>
@@ -50,6 +50,8 @@
     </div>
     <p class="foot">Interpretação local por regras. Seus dados são processados no navegador e não são enviados a nenhum servidor.</p>
   </section>
+
+  <section id="viewGallery" class="results gallery" hidden></section>
 
   <section id="viewExplore" class="results explore" hidden></section>
 
@@ -135,6 +137,7 @@
 <script src="commands.js"></script>
 <script src="widget-schema.js"></script>
 <script src="editor.js"></script>
+<script src="gallery.js"></script>
 <script src="explore.js"></script>
 <script src="app.js"></script>
 </body>

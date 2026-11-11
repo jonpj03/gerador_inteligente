@@ -43,3 +43,6 @@ Também funciona abrindo `index.html` localmente. Chart.js, SheetJS, html2canvas
 - **Novos tipos:** funil, cascata, treemap, combinado (barras + linha), bolhas, barras 100% empilhadas, agrupadas, linhas por série, lista de nomes, tabela personalizada (várias colunas e listas de valores) e nota/comentário. KPI aceita qualquer campo e meta.
 - **Arquitetura:** `widget-schema.js` (catálogo declarativo de tipos) + `editor.js` (editor único). Para criar um tipo novo, acrescente uma entrada em `SDSchema.TYPES` e, se precisar de um cálculo novo, um ramo em `dashboard-engine.js` / `render.js`.
 - O layout salvo agora guarda a especificação completa de cada visualização.
+
+## Versão 5
+- **Aba Gráficos:** galeria com um exemplo ilustrativo (valores fictícios, nas cores da sua paleta) de cada tipo de visualização, com descrição, quando usar e o que o gráfico precisa nos dados. O botão "Criar com meus dados" abre o editor já no tipo escolhido. Tem filtro por categoria e busca.

@@ -106,6 +106,7 @@ const SDEditor = (() => {
       const dm = (p.primaryDim || p.dims[0] || p.ds.columns[0] || {}).name || '', pm = p.primaryMeasure;
       f = { type: 'hbar', title: '', m: pm ? pm.name : '', agg: pm ? S.defAgg(pm) : 'count', m2: '', agg2: '', m3: '', dim: dm, dim2: '', grain: 'auto', limit: 0, sort: '', goal: '', showVal: true, style: 'chips', text: '', cols: [{ f: '', agg: 'count' }], where: [], labels: '', lblFmt: 'both', color: '' };
     }
+    if (!w && o2.type && S.byId(o2.type)) f.type = o2.type;
     if (f.type === 'table' && !f.cols.length) f.cols = [{ f: '', agg: 'count' }];
     sz = { preset: '', wpx: w && w.wpx || '', hpx: w && w.h || '', span: w ? w.span : '', auto: !w || w.auto !== false, reset: false };
     fix(); shell(); d.classList.add('wide'); d.returnValue = '';
