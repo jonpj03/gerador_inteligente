@@ -15,6 +15,8 @@ const SDEngine = (() => {
   const isFin = c => c.type === 'currency' || RX.finance.test(N(c.name));
   const aggFor = c => (c.type === 'percent' || RX.avg.test(N(c.name))) ? 'avg' : 'sum';
   const MEAS = ['number', 'percent', 'currency'];
+  const AGGL = { sum: 'Soma', avg: 'Média', median: 'Mediana', min: 'Mínimo', max: 'Máximo', count: 'Contagem', distinct: 'Contagem distinta', list: 'Lista de valores', doneRate: 'Taxa de conclusão' };
+  const aggLabel = (m, a) => m ? `${AGGL[a] || a} de ${m}` : 'Registros';
   let _id = 0; const nid = () => 'w' + (++_id);
 
   /* ---------- cores ---------- */
@@ -154,6 +156,12 @@ const SDEngine = (() => {
     if (agg === 'count') { let n = 0; for (let i = 0; i < rows.length; i++) if (rows[i][m] != null) n++; return n; }
     if (agg === 'distinct') { const s = new Set(); for (const r of rows) { const v = r[m]; if (v != null) s.add(v instanceof Date ? v.getTime() : v); } return s.size; }
     if (agg === 'doneRate') { const ok = rows.filter(r => r[m] != null); return ok.length ? 100 * ok.filter(r => isDone(r[m])).length / ok.length : null; }
+    if (agg === 'median') { const a = []; for (const r of rows) { const v = r[m]; if (typeof v === 'number') a.push(v); } if (!a.length) return null; a.sort((x, y) => x - y); const k = a.length >> 1; return a.length % 2 ? a[k] : (a[k - 1] + a[k]) / 2; }
+    if (agg === 'list') {
+      const st = new Set(); for (const r of rows) { const v = r[m]; if (v != null) st.add(v instanceof Date ? SDParser.fmtDate(v) : String(v)); }
+      const arr = [...st].sort((a, b) => a.localeCompare(b, 'pt-BR', { numeric: true }));
+      return arr.length ? arr.slice(0, 300).join(', ') + (arr.length > 300 ? ` (+${arr.length - 300})` : '') : null;
+    }
     let n = 0, s = 0, mx = -Infinity, mn = Infinity;
     for (let i = 0; i < rows.length; i++) { const v = rows[i][m]; if (typeof v === 'number') { n++; s += v; if (v > mx) mx = v; if (v < mn) mn = v; } }
     if (!n) return null;
@@ -172,9 +180,11 @@ const SDEngine = (() => {
     const span = (mx - mn) / 864e5;
     return span > 1800 ? 'year' : span > 75 ? 'month' : 'day';
   }
-  const pk = (d, g) => g === 'year' ? String(d.getFullYear()) : g === 'month' ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` : SDParser.ymd(d);
+  const pk = (d, g) => g === 'year' ? String(d.getFullYear()) : g === 'quarter' ? `${d.getFullYear()}-Q${Math.floor(d.getMonth() / 3) + 1}` : g === 'week' ? SDParser.ymd(new Date(d.getFullYear(), d.getMonth(), d.getDate() - ((d.getDay() + 6) % 7))) : g === 'month' ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` : SDParser.ymd(d);
   function plabel(k, g) {
     if (g === 'year') return k;
+    if (g === 'quarter') { const [y, q] = k.split('-Q'); return `T${q}/${y.slice(2)}`; }
+    if (g === 'week') { const [, m, d] = k.split('-'); return `sem ${d}/${m}`; }
     if (g === 'month') { const [y, m] = k.split('-'); return `${MPT[+m - 1]}/${y.slice(2)}`; }
     const [y, m, d] = k.split('-'); return `${d}/${m}`;
   }
@@ -256,6 +266,24 @@ const SDEngine = (() => {
         if (n >= 3) { const sx = xy.reduce((a, x) => a + x[0], 0), sy = xy.reduce((a, x) => a + x[1], 0), sxy = xy.reduce((a, x) => a + x[0] * x[1], 0), sxx = xy.reduce((a, x) => a + x[0] * x[0], 0), den = n * sxx - sx * sx; if (den) { const b = (n * sxy - sx * sy) / den, a = (sy - b * sx) / n; ds.push({ label: 'Tendência linear', data: pts.map((_, i) => a + b * i) }); } }
       }
       return { labels: pts.map(x => x.label), datasets: ds, fmt: ft };
+    }
+    if (w.data === 'combo') {
+      const dc = colOf(p, w.dim), agg2 = w.agg2 || w.agg, c2 = w.m2 ? colOf(p, w.m2) : null, f2 = c2 ? c2.type : 'number';
+      if (dc && dc.type === 'date') {
+        const s1 = timeSeries(rows, w.dim, w.m, w.agg, w.grain), s2 = timeSeries(rows, w.dim, w.m2, agg2, w.grain);
+        return { labels: s1.pts.map(x => x.label), datasets: [{ label: aggLabel(w.m, w.agg), data: s1.pts.map(x => x.v) }, { label: aggLabel(w.m2, agg2), data: s2.pts.map(x => x.v) }], fmt: ft, fmt2: f2, total: s1.pts.length, matched: s1.pts.length, shown: s1.pts.length, others: 0, q: false };
+      }
+      const gb = new Map(groupRows(rows, w.dim, w.m2, agg2).map(x => [x.k, x.v]));
+      const items = groupRows(rows, w.dim, w.m, w.agg).filter(x => x.v != null).map(x => ({ k: x.k, label: String(x.k), v: x.v, v2: gb.get(x.k) }));
+      const r = pickRows(items, w, false);
+      return { labels: r.g.map(x => x.label), datasets: [{ label: aggLabel(w.m, w.agg), data: r.g.map(x => x.v) }, { label: aggLabel(w.m2, agg2), data: r.g.map(x => x.v2 == null ? null : x.v2) }], fmt: ft, fmt2: f2, total: r.total, matched: r.matched, shown: r.g.length, others: 0, q: r.q };
+    }
+    if (w.data === 'bubble') {
+      const gy = new Map(groupRows(rows, w.dim, w.m2, w.agg).map(x => [x.k, x.v])), gs = new Map(groupRows(rows, w.dim, w.m3, w.agg).map(x => [x.k, x.v]));
+      let pts = groupRows(rows, w.dim, w.m, w.agg).map(x => ({ label: String(x.k), x: x.v, y: gy.get(x.k), s: w.m3 ? gs.get(x.k) : x.n })).filter(q => q.x != null && q.y != null && q.s != null && q.s > 0);
+      const total = pts.length; pts.sort((a, b) => b.s - a.s); const lim = +w.limit || 300; pts = pts.slice(0, lim);
+      const c2 = colOf(p, w.m2);
+      return { points: pts, xl: w.m || 'Registros', yl: w.m2 || 'Registros', sl: w.m3 || 'Registros', fmt: ft, fmt2: c2 ? c2.type : 'number', total, shown: pts.length };
     }
     if (w.data === 'pareto') {
       const items = groupRows(rows, w.dim, w.m, w.agg).filter(x => x.v != null && x.v > 0).map(x => ({ k: x.k, label: String(x.k), v: x.v })).sort((a, b) => b.v - a.v);
@@ -440,9 +468,9 @@ const SDEngine = (() => {
     const mc = w.m ? colOf(p, w.m) : null, ft = mc ? mc.type : 'number';
     switch (w.kind) {
       case 'kpi': {
-        const v = aggregate(rows, w.m, w.agg);
-        const text = v == null ? '—' : w.agg === 'doneRate' ? fmt(v, 'percent') : (w.agg === 'count' || w.agg === 'distinct') ? fmt(v, 'number') : fmt(v, ft, true);
-        return { value: v, text, trend: trend(w, rows, p) };
+        const v = aggregate(rows, w.m, w.agg), isList = typeof v === 'string';
+        const text = v == null ? '—' : isList ? v : w.agg === 'doneRate' ? fmt(v, 'percent') : (w.agg === 'count' || w.agg === 'distinct') ? fmt(v, 'number') : fmt(v, ft, true);
+        return { value: v, text, isList, trend: isList ? null : trend(w, rows, p), goal: !isList && +w.goal > 0 && typeof v === 'number' ? v / +w.goal * 100 : null };
       }
       case 'chart': return chartData(w, rows, p, ft, opts);
       case 'heatmap': {
@@ -459,6 +487,21 @@ const SDEngine = (() => {
         return { head, body, numFrom: 1 };
       }
       case 'datatable': return { head: p.ds.columns.map(c => c.name), cols: p.ds.columns, rows: rows.slice(0, 100), total: rows.length };
+      case 'table': {
+        const dc = w.dim ? colOf(p, w.dim) : null, ct = crosstab(rows, dc, null, { grain: w.grain });
+        const cs = w.cols && w.cols.length ? w.cols : [{ f: '', agg: 'count' }];
+        const numeric = a => a !== 'list';
+        const items = ct.rowKeys.map(k => { const rs = ct.rowMap.get(k), vals = cs.map(c => aggregate(rs, c.f || null, c.agg)), fv = vals.find(v => typeof v === 'number'); return { k, label: ct.rowLabel(k), v: fv == null ? 0 : fv, vals }; });
+        const r = pickRows(items, { ...w, sort: w.sort || (numeric(cs[0].agg) ? 'desc' : 'az') }, false, dc && dc.type === 'date');
+        return { head: [w.dim || '', ...cs.map(c => aggLabel(c.f, c.agg))], types: cs.map(c => (c.agg === 'count' || c.agg === 'distinct') ? 'number' : ((colOf(p, c.f) || {}).type || 'number')), rows: r.g, total: r.total, matched: r.matched, shown: r.g.length, q: r.q };
+      }
+      case 'list': {
+        const dc = colOf(p, w.dim), ct = crosstab(rows, dc, null, { grain: w.grain }), hasV = w.showVal !== false, agg = w.m ? w.agg : 'count';
+        const items = ct.rowKeys.map(k => ({ k, label: ct.rowLabel(k), v: hasV ? (aggregate(ct.rowMap.get(k), w.m || null, agg) ?? 0) : 0 }));
+        const r = pickRows(items, { ...w, sort: w.sort || 'az' }, false, dc && dc.type === 'date');
+        const mc = w.m ? colOf(p, w.m) : null;
+        return { items: r.g, hasV, fmt: (agg === 'count' || agg === 'distinct') ? 'number' : (mc ? mc.type : 'number'), total: r.total, matched: r.matched, shown: r.g.length, q: r.q };
+      }
       case 'strategy': return { sections: strategy(rows, p) };
       case 'highlights': return { items: highlights(rows, p, w) };
       case 'bottlenecks': return { items: p.status ? bottlenecks(rows, p) : [] };
@@ -495,5 +538,5 @@ const SDEngine = (() => {
     return `Li ${p.ds.rows.length} linhas e ${c.length} colunas. Identifiquei: ${parts.join('; ') || 'poucas dimensões analisáveis'}.`;
   }
 
-  return { buildStrategic, crosstab, aggregate, applyWhere, rowsFor, RX, MFULL, MPT, MEAS, isDone, isFin, aggFor, nid, cap, makePalette, withL, soft, hexRgb, PRESETS, fmt, profile, buildAll, buildExecutive, compute, applyFilters, describe, colOf, W, shade: withL };
+  return { AGGL, aggLabel, buildStrategic, crosstab, aggregate, applyWhere, rowsFor, RX, MFULL, MPT, MEAS, isDone, isFin, aggFor, nid, cap, makePalette, withL, soft, hexRgb, PRESETS, fmt, profile, buildAll, buildExecutive, compute, applyFilters, describe, colOf, W, shade: withL };
 })();

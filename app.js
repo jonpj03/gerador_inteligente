@@ -8,7 +8,7 @@
   const KEY = 'sds.prefs.v1', LKEY = 'sds.layout.v1', BRAND = '#C2185B';
   const SUGGEST = ['Analise a produtividade da equipe e apresente os principais indicadores.', 'Crie um dashboard executivo com os resultados mensais.', 'Compare o desempenho dos colaboradores.', 'Identifique gargalos operacionais.', 'Mostre a evolução dos projetos e os principais riscos.'];
   const emptyF = () => ({ dims: {}, from: '', to: '', months: [], years: [] });
-  const defPrefs = () => { const m = E.PRESETS[0]; return { primary: m.primary, palette: [...m.palette], preset: 'Magenta', bg: null, theme: 'light', legend: true, labels: false, chat: true, cardSize: 'normal', chartFormat: 'auto', titles: {} }; };
+  const defPrefs = () => { const m = E.PRESETS[0]; return { primary: m.primary, palette: [...m.palette], preset: 'Magenta', bg: null, theme: 'light', legend: true, lbl: true, chat: true, cardSize: 'normal', chartFormat: 'auto', titles: {} }; };
   function loadPrefs() {
     const d = defPrefs();
     try {
@@ -18,10 +18,10 @@
       if (hex(j.bg)) d.bg = j.bg;
       if (['light', 'dark'].includes(j.theme)) d.theme = j.theme;
       if (typeof j.legend === 'boolean') d.legend = j.legend;
-      if (typeof j.labels === 'boolean') d.labels = j.labels;
+      if (typeof j.lbl === 'boolean') d.lbl = j.lbl;
       if (typeof j.chat === 'boolean') d.chat = j.chat;
       if (['compact', 'normal', 'large'].includes(j.cardSize)) d.cardSize = j.cardSize;
-      if (['auto', 'bar', 'hbar', 'line', 'area', 'doughnut', 'pie', 'radar', 'polar'].includes(j.chartFormat)) d.chartFormat = j.chartFormat;
+      if (['auto', 'bar', 'hbar', 'line', 'area', 'doughnut', 'pie', 'radar', 'polar', 'funnel', 'waterfall', 'treemap'].includes(j.chartFormat)) d.chartFormat = j.chartFormat;
       if (j.titles && typeof j.titles === 'object') Object.keys(DEF_TITLES).forEach(k => { if (typeof j.titles[k] === 'string') d.titles[k] = j.titles[k].slice(0, 80); });
     } catch (e) { /* localStorage indisponível */ }
     return d;
@@ -174,46 +174,7 @@
     box.innerHTML = h || '<span class="muted">Sem filtros disponíveis para estes dados.</span>';
     if (openIdx > -1) { const d = $$('.fdrop', box)[openIdx]; if (d) d.open = true; }
   }
-  function renderBuilder() {
-    const b = $('#builder');
-    if (S.tab !== 'custom') { b.hidden = true; return; }
-    b.hidden = false; const p = S.profile;
-    const o = (v, l) => `<option value="${esc(v)}">${esc(l)}</option>`;
-    b.innerHTML = `<label class="fld">Tipo de visualização<select id="bType">${[['kpi', 'Indicador (KPI)'], ['bar', 'Barras'], ['hbar', 'Barras horizontais'], ['line', 'Linha'], ['doughnut', 'Rosca'], ['pie', 'Pizza'], ['pareto', 'Pareto (80/20)'], ['radar', 'Radar'], ['stacked', 'Barras empilhadas'], ['heatmap', 'Mapa de calor'], ['scatter', 'Dispersão'], ['grouptable', 'Tabela agrupada']].map(x => o(...x)).join('')}</select></label>
-      <label class="fld" data-f="m">Medida<select id="bM">${o('', 'Contagem de registros')}${p.measures.map(c => o(c.name, c.name)).join('')}</select></label>
-      <label class="fld" data-f="agg">Agregação<select id="bAgg">${[['sum', 'Soma'], ['avg', 'Média'], ['max', 'Máximo'], ['min', 'Mínimo']].map(x => o(...x)).join('')}</select></label>
-      <label class="fld" data-f="dim">Dimensão<select id="bDim">${p.dims.map(c => o('c:' + c.name, c.name)).join('')}${p.dates.map(c => o('d:' + c.name, 'Tempo: ' + c.name)).join('')}</select></label>
-      <label class="fld" data-f="dim2">Segunda dimensão<select id="bDim2">${p.dims.map(c => o(c.name, c.name)).join('')}</select></label>
-      <label class="fld" data-f="m2">Segunda medida<select id="bM2">${p.measures.map(c => o(c.name, c.name)).join('')}</select></label>
-      <button class="btn primary" id="bAdd">Adicionar ao dashboard</button>`;
-    bToggle();
-  }
-  function bToggle() {
-    const t = $('#bType').value, show = { kpi: ['m', 'agg'], bar: ['m', 'agg', 'dim'], hbar: ['m', 'agg', 'dim'], line: ['m', 'agg', 'dim'], doughnut: ['m', 'agg', 'dim'], pie: ['m', 'agg', 'dim'], pareto: ['m', 'agg', 'dim'], radar: ['m', 'agg', 'dim'], stacked: ['dim', 'dim2'], heatmap: ['dim', 'dim2'], scatter: ['m', 'm2'], grouptable: ['dim'] }[t];
-    $$('#builder [data-f]').forEach(l => { l.hidden = !show.includes(l.dataset.f); });
-  }
-  function builderAdd() {
-    const p = S.profile, t = $('#bType').value, m = $('#bM').value || null, agg = m ? $('#bAgg').value : 'count', dv = $('#bDim').value || '', d2 = $('#bDim2').value, m2 = $('#bM2').value;
-    const dim = dv.slice(2), isDate = dv.startsWith('d:'), cap = E.cap;
-    const mt = m ? `${agg === 'avg' ? 'média de ' : agg === 'sum' ? 'total de ' : agg === 'max' ? 'máximo de ' : 'mínimo de '}${m}` : 'registros';
-    let spec;
-    if (t === 'kpi') spec = { kind: 'kpi', title: cap(mt), m, agg, span: 3 };
-    else if (t === 'pareto') {
-      if (!dim || isDate) return toast('Escolha uma dimensão de categoria.', true);
-      if (agg === 'avg' || agg === 'min' || agg === 'max') return toast('O Pareto precisa de soma ou contagem (porcentagem acumulada).', true);
-      spec = { kind: 'chart', data: 'pareto', chart: 'pareto', title: `Pareto: ${cap(mt)} por ${dim}`, m, agg, dim, limit: 20, span: 12 };
-    } else if (['bar', 'hbar', 'line', 'doughnut', 'pie', 'radar'].includes(t)) {
-      if (!dim) return toast('Os dados não têm uma dimensão para este gráfico.', true);
-      spec = isDate ? { kind: 'chart', data: 'time', chart: t, title: `${cap(mt)} ao longo de ${dim}`, m, agg, date: dim, span: 6 } : { kind: 'chart', data: 'group', chart: t, title: `${cap(mt)} por ${dim}`, m, agg, dim, limit: 8, span: 6 };
-    } else if (t === 'stacked' || t === 'heatmap') {
-      if (isDate || !dim || !d2 || dim === d2) return toast('Escolha duas dimensões de categoria diferentes.', true);
-      spec = t === 'stacked' ? { kind: 'chart', data: 'stacked', chart: 'stacked', title: `${dim} × ${d2}`, dim, dim2: d2, span: 6 } : { kind: 'heatmap', title: `Mapa de calor: ${dim} × ${d2}`, dim, dim2: d2, span: 12 };
-    } else if (t === 'scatter') {
-      if (p.measures.length < 2 || !m || m === m2) return toast('A dispersão precisa de duas medidas numéricas diferentes.', true);
-      spec = { kind: 'chart', data: 'scatter', chart: 'scatter', title: `${m} × ${m2}`, m, m2, span: 6 };
-    } else { if (!dim || isDate) return toast('Escolha uma dimensão de categoria.', true); spec = { kind: 'grouptable', title: 'Resumo por ' + dim, dim, span: 12 }; }
-    S.dash.custom.push(E.W(spec)); renderBoard(false); renderPanelWidgets(); toast('Visualização adicionada.');
-  }
+  function renderBuilder() { $('#builder').hidden = true; }
 
   function renderBoard(animate) {
     if (!S.ds) return;
@@ -267,7 +228,7 @@
   const allW = () => Object.values(S.dash).flat();
   const ctx = {
     restoreTheme() { const ch = S.prefs.chat; S.prefs = defPrefs(); S.prefs.chat = ch; allW().forEach(w => { delete w.color; delete w.userChart; }); commit(true); },
-    setColor, setTheme(t) { S.prefs.theme = t; commit(true); }, setLegend(b) { S.prefs.legend = b; commit(true); }, setLabels(b) { S.prefs.labels = b; commit(true); },
+    setColor, setTheme(t) { S.prefs.theme = t; commit(true); }, setLegend(b) { S.prefs.legend = b; commit(true); }, setLabels(b) { S.prefs.lbl = b; commit(true); },
     setChartType(from, to) {
       let n = 0;
       allW().forEach(w => { if (!SDRender.isSeries(w)) return; const cur = SDRender.chartType(w, S.prefs); if ((from && cur !== from) || cur === to) return; w.chart = to; w.userChart = true; n++; });
@@ -296,7 +257,7 @@
     $('#pPresets').innerHTML = E.PRESETS.map(x => `<button class="sw" data-preset="${x.name}" aria-pressed="${P.preset === x.name}"><i style="background:${x.primary}"></i>${x.name}</button>`).join('');
     $$('#pTheme button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === P.theme)));
     $('#pBg').value = P.bg || (P.theme === 'dark' ? '#121316' : '#F5F6F8');
-    $('#pLegend').checked = P.legend; $('#pLabels').checked = !!P.labels; $('#pFormat').value = P.chartFormat; $('#pSize').value = P.cardSize;
+    $('#pLegend').checked = P.legend; $('#pLabels').checked = !!P.lbl; $('#pFormat').value = P.chartFormat; $('#pSize').value = P.cardSize;
     const ti = $('#pTitle'); ti.disabled = S.tab === 'insights' || !S.ds; if (document.activeElement !== ti) ti.value = DEF_TITLES[S.tab] ? (P.titles[S.tab] || DEF_TITLES[S.tab]) : '';
     renderPanelWidgets();
   }
@@ -337,8 +298,7 @@
       const all = readL(), L = all[lsig()] = {};
       Object.keys(S.dash).forEach(tab => {
         const ws = S.dash[tab];
-        if (tab === 'custom' || tab === 'analysis') L[tab] = { specs: ws.map(({ id, q, ...r }) => r), title: tab === 'analysis' ? S.analysisTitle : undefined };
-        else L[tab] = { order: ws.map(wkey), cfg: Object.fromEntries(ws.map(w => [wkey(w), Object.fromEntries(CFGK.filter(k => w[k] !== undefined).map(k => [k, w[k]]))])) };
+        L[tab] = { specs: ws.map(({ id, q, ...r }) => r), title: tab === 'analysis' ? S.analysisTitle : undefined };
       });
       const keys = Object.keys(all); if (keys.length > 8) delete all[keys[0]];
       localStorage.setItem(LKEY, JSON.stringify(all));
@@ -356,42 +316,15 @@
   }
 
   /* ---------- configuração de widget ---------- */
-  async function editWidget(w) {
-    const p = S.profile, series = SDRender.isSeries(w), o = (v, l, s) => `<option value="${esc(v)}"${s ? ' selected' : ''}>${esc(l)}</option>`;
-    const simpleAgg = ['sum', 'avg', 'max', 'min', 'count'].includes(w.agg);
-    let h = `<form method="dialog" class="dlg"><h2>Configurar visualização</h2><label class="fld">Título<input type="text" name="title" value="${esc(w.title)}" maxlength="90"></label>`;
-    if (series) h += `<label class="fld">Formato<select name="chart">${[['bar', 'Barras'], ['hbar', 'Barras horizontais'], ['line', 'Linha'], ['area', 'Área'], ['doughnut', 'Rosca'], ['pie', 'Pizza'], ['radar', 'Radar'], ['polar', 'Área polar']].map(([v, l]) => o(v, l, SDRender.chartType(w, S.prefs) === v)).join('')}</select></label>`;
-    const par = w.data === 'pareto';
-    if ((w.kind === 'kpi' && simpleAgg) || series || par || w.data === 'hist') {
-      h += `<label class="fld">Medida<select name="m">${w.data === 'hist' ? '' : o('', 'Contagem de registros', !w.m)}${p.measures.map(c => o(c.name, c.name, w.m === c.name)).join('')}</select></label>`;
-      if (w.data !== 'hist') h += `<label class="fld">Agregação<select name="agg">${[['sum', 'Soma'], ['avg', 'Média'], ['max', 'Máximo'], ['min', 'Mínimo']].map(([v, l]) => o(v, l, w.agg === v)).join('')}</select></label>`;
-    }
-    if (w.data === 'group' || par) h += `<label class="fld">Agrupar por<select name="dim">${p.dims.map(c => o(c.name, c.name, w.dim === c.name)).join('')}</select></label><label class="fld">Máximo de itens<select name="limit">${[[0, 'Todos'], [5, 'Top 5'], [8, 'Top 8'], [10, 'Top 10'], [15, 'Top 15'], [20, 'Top 20'], [50, 'Top 50']].map(([n, l]) => o(n, l, (+w.limit || 0) === n)).join('')}</select></label>`;
-    if (w.data === 'time') h += `<label class="check mt"><input type="checkbox" name="ma"${w.ma ? ' checked' : ''}> Média móvel (3 períodos)</label><label class="check"><input type="checkbox" name="trend"${w.trend ? ' checked' : ''}> Linha de tendência linear</label><label class="fld">Coluna de data<select name="date">${p.dates.map(c => o(c.name, c.name, w.date === c.name)).join('')}</select></label><label class="fld">Granularidade<select name="grain">${[['auto', 'Automática'], ['day', 'Dia'], ['month', 'Mês'], ['year', 'Ano']].map(([v, l]) => o(v, l, (w.grain || 'auto') === v)).join('')}</select></label>`;
-    const mx = SDRender.isMatrix(w);
-    if (mx) h = h.replace('<label class="fld">Título', `<label class="fld">Formato<select name="chart">${[['stacked', 'Barras empilhadas'], ['sbar', 'Empilhadas horizontais'], ['bar', 'Barras agrupadas'], ['hbar', 'Agrupadas horizontais'], ['line', 'Linhas']].map(([v, l]) => o(v, l, w.chart === v)).join('')}</select></label><label class="fld">Título`);
-    if (w.kind !== 'kpi') h += `<label class="fld">Tamanho predefinido<select name="preset">${[['', 'Manter atual'], ['c', 'Compacto'], ['m', 'Médio'], ['g', 'Grande'], ['x', 'Extra grande']].map(([v, l]) => o(v, l, false)).join('')}</select></label><div class="row2"><label class="fld">Largura (px)<input type="text" inputmode="numeric" name="wpx" value="${w.wpx || ''}" placeholder="automática"></label><label class="fld">Altura (px)<input type="text" inputmode="numeric" name="hpx" value="${w.h || ''}" placeholder="automática"></label></div>`;
-    h += `<label class="fld">Largura em colunas (de 12)<select name="span">${[2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(n => o(n, n, +w.span === n)).join('')}</select></label>`;
-    if (series || mx) h += `<label class="check mt"><input type="checkbox" name="auto"${w.auto !== false ? ' checked' : ''}> Ajustar tamanho ao conteúdo</label>`;
-    h += '<label class="check"><input type="checkbox" name="reset"> Restaurar tamanho original</label>';
-    if (w.kind === 'chart') h += `<label class="check mt"><input type="checkbox" name="usecolor"${w.color ? ' checked' : ''}> Usar cor própria <input type="color" name="color" value="${w.color || S.prefs.palette[0]}"></label>`;
-    h += '<div class="dlg-f"><button class="btn ghost" value="cancel">Cancelar</button><button class="btn primary" value="ok">Aplicar</button></div></form>';
-    const { val, fd } = await openDlg(h); if (val !== 'ok' || !fd) return;
-    const g = k => fd.get(k);
-    if (g('title') && g('title').trim()) w.title = g('title').trim();
-    if (g('chart') && g('chart') !== SDRender.chartType(w, S.prefs)) { w.chart = g('chart'); w.userChart = true; }
-    if (fd.has('m') || w.data === 'hist') w.m = g('m') || null;
-    if (fd.has('agg')) w.agg = w.m ? g('agg') : 'count'; else if (w.kind !== 'kpi' && series && !w.m) w.agg = 'count';
-    ['dim', 'date', 'grain'].forEach(k => { if (fd.has(k)) w[k] = g(k); });
-    if (fd.has('limit')) w.limit = +g('limit');
-    if (w.data === 'time') { w.ma = g('ma') ? 3 : undefined; w.trend = !!g('trend'); }
-    const PRE = { c: [4, 200], m: [6, 260], g: [8, 360], x: [12, 480] }, pr = PRE[g('preset')], hp = parseInt(g('hpx')), wp = parseInt(g('wpx'));
-    if (g('reset')) { w.span = w.span0 || w.span; delete w.h; delete w.wpx; w.auto = true; }
-    else if (pr) { w.span = pr[0]; w.h = w.kind === 'kpi' ? undefined : pr[1]; delete w.wpx; }
-    else { w.span = +g('span'); if (wp >= 120) w.wpx = Math.min(wp, 4000); else delete w.wpx; if (hp >= 100) w.h = Math.min(hp, 6000); else delete w.h; }
-    if (fd.has('auto')) w.auto = !!g('auto');
-    if (w.kind === 'chart') { if (g('usecolor')) w.color = g('color'); else delete w.color; }
-    renderBoard(false); renderPanelWidgets();
+  function editWidget(w) {
+    SDEditor.open({ w, p: S.profile, onSave: nw => { const arr = S.dash[S.tab], i = arr.findIndex(x => x.id === w.id); if (i >= 0) arr[i] = nw; renderBoard(false); renderPanelWidgets(); } });
+  }
+  function addViz() {
+    if (S.tab === 'insights') return toast('Abra um dashboard para adicionar visualizações.', true);
+    SDEditor.open({ w: null, p: S.profile, onSave: nw => {
+      S.dash[S.tab].push(nw); renderBoard(false); renderPanelWidgets(); toast('Visualização adicionada.');
+      setTimeout(() => { const c = $(`.card[data-id="${nw.id}"]`); if (c) c.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 80);
+    } });
   }
 
   /* ---------- eventos ---------- */
@@ -408,6 +341,7 @@
     ['dragover', 'dragenter'].forEach(ev => comp.addEventListener(ev, e => { e.preventDefault(); comp.classList.add('drag'); }));
     ['dragleave', 'drop'].forEach(ev => comp.addEventListener(ev, e => { e.preventDefault(); comp.classList.remove('drag'); if (ev === 'drop' && e.dataTransfer.files.length) addFiles(e.dataTransfer.files); }));
     $('#mainnav').addEventListener('click', e => { const b = e.target.closest('[data-nav]'); if (b) setView(b.dataset.nav); });
+    $('#btnAddViz').addEventListener('click', addViz);
     $('#btnChat').addEventListener('click', () => { S.prefs.chat = !S.prefs.chat; savePrefs(); applyTheme(); toast(S.prefs.chat ? 'Chat ligado.' : 'Chat desligado. Reative para enviar comandos.'); });
     $('#btnPresent').addEventListener('click', () => {
       if (S.tab === 'insights') return toast('Abra um dashboard para apresentar.', true);
@@ -416,7 +350,7 @@
       f.call(el).catch(() => toast('Não foi possível entrar em tela cheia.', true));
     });
     document.addEventListener('fullscreenchange', () => { if (S.ds && S.view === 'results') setTimeout(() => renderBoard(false), 150); });
-    $('#pLabels').addEventListener('change', e => { S.prefs.labels = e.target.checked; commit(true); });
+    $('#pLabels').addEventListener('change', e => { S.prefs.lbl = e.target.checked; commit(true); });
     $('#pExportCfg').addEventListener('click', () => { SDExport.download(new Blob([JSON.stringify({ app: 'smart-dash-studio', version: 2, prefs: S.prefs, layout: readL() })], { type: 'application/json' }), 'smart-dash-config.json'); toast('Configuração exportada.'); });
     $('#pImportCfg').addEventListener('click', () => $('#cfgFile').click());
     $('#cfgFile').addEventListener('change', async e => {
@@ -456,8 +390,6 @@
       $$('.fdrop[open]').forEach(d => { if (!d.contains(e.target)) d.open = false; });
       if (!e.target.closest('.menu')) $('#exportMenu').hidden = true;
     });
-    $('#builder').addEventListener('change', e => { if (e.target.id === 'bType') bToggle(); });
-    $('#builder').addEventListener('click', e => { if (e.target.id === 'bAdd') builderAdd(); });
 
     const board = $('#board');
     board.addEventListener('click', e => { const b = e.target.closest('[data-act]'); if (!b) return; const card = b.closest('.card'), w = findW(card.dataset.id); if (w) cardAction(b.dataset.act, card, w); });
@@ -474,7 +406,7 @@
       const card = h.closest('.card'), w = findW(card.dataset.id); if (!w) return;
       try { h.setPointerCapture(e.pointerId); } catch (err) { /* ok */ }
       const r = card.getBoundingClientRect(), gap = 16, colW = (board.getBoundingClientRect().width - 11 * gap) / 12, sx = e.clientX, sy = e.clientY;
-      const tgt = () => card.querySelector('.cs') || card.querySelector('.tbl-wrap') || card.querySelector('.card-b');
+      const tgt = () => card.querySelector('.cs') || card.querySelector('.lv') || card.querySelector('.tbl-wrap') || card.querySelector('.card-b');
       const sh = tgt().getBoundingClientRect().height, mode = h.classList.contains('rz-r') ? 'w' : h.classList.contains('rz-b') ? 'h' : 'wh';
       let ns = null, nh = null;
       const mv = ev => {

@@ -3,8 +3,8 @@ const SDCommands = (() => {
   const N = SDParser.norm;
   const COLORS = { azul: 'Azul', verde: 'Verde', laranja: 'Laranja', roxo: 'Roxo', violeta: 'Roxo', cinza: 'Grafite', grafite: 'Grafite', turquesa: 'Turquesa', teal: 'Turquesa', magenta: 'Magenta', corporativo: 'Corporativo', rosa: 'Magenta', multicor: 'Multicor', colorido: 'Multicor' };
   const EXTRA = { vermelho: '#C62828', amarelo: '#F9A825', marrom: '#6D4C41' };
-  const TYPES = [['barras horizontais', 'hbar'], ['barra horizontal', 'hbar'], ['rosca', 'doughnut'], ['donut', 'doughnut'], ['pizza', 'pie'], ['colunas', 'bar'], ['coluna', 'bar'], ['barras', 'bar'], ['barra', 'bar'], ['linhas', 'line'], ['linha', 'line'], ['area', 'area'], ['radar', 'radar'], ['polar', 'polar']];
-  const TNAME = { bar: 'barras', hbar: 'barras horizontais', doughnut: 'rosca', pie: 'pizza', line: 'linha', area: 'área', radar: 'radar', polar: 'polar' };
+  const TYPES = [['barras horizontais', 'hbar'], ['barra horizontal', 'hbar'], ['rosca', 'doughnut'], ['donut', 'doughnut'], ['pizza', 'pie'], ['colunas', 'bar'], ['coluna', 'bar'], ['barras', 'bar'], ['barra', 'bar'], ['linhas', 'line'], ['linha', 'line'], ['area', 'area'], ['radar', 'radar'], ['polar', 'polar'], ['funil', 'funnel'], ['cascata', 'waterfall'], ['treemap', 'treemap']];
+  const TNAME = { bar: 'barras', hbar: 'barras horizontais', doughnut: 'rosca', pie: 'pizza', line: 'linha', area: 'área', radar: 'radar', polar: 'polar', funnel: 'funil', waterfall: 'cascata', treemap: 'treemap' };
   const TABS = { executivo: 'executive', operacional: 'operational', analitico: 'analytical', estrategico: 'strategic', personalizado: 'custom', insights: 'insights' };
 
   const typeIn = s => { for (const [w, t] of TYPES) { const i = s.indexOf(w); if (i > -1) return { t, i, w }; } return null; };

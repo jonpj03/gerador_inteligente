@@ -36,3 +36,10 @@ Também funciona abrindo `index.html` localmente. Chart.js, SheetJS, html2canvas
 - **Aba Estratégico:** resumo com destaques, riscos, oportunidades e ações sugeridas (por regras, sobre os dados e filtros atuais), Pareto 80/20, tendência com média móvel e linha linear, e realizado × meta quando há coluna de meta.
 - **Mais flexibilidade:** gráficos Radar e Área polar, rótulos de valores nas barras, modo Apresentar (tela cheia), exportar/importar configuração (tema, paleta e layouts) em JSON.
 - **Visual renovado** mantendo a identidade branca e magenta.
+
+## Versão 4
+- **Rótulos de valores** em todos os gráficos (barras, linhas, pizza/rosca com valor e %, radar, funil, cascata, treemap), ligados por padrão. Controle global no painel e por gráfico no editor. Se houver categorias demais, os rótulos são ocultados e a nota do gráfico avisa.
+- **Editor de visualizações** (botão **+ Visualização** e ⚙ em cada card): escolha o tipo, qualquer campo, como calcular (soma, média, mediana, mínimo, máximo, contagem, **contagem distinta**, **lista de valores**), agrupamento por qualquer coluna (datas por dia/semana/mês/trimestre/ano), filtros próprios, Top N, ordenação, rótulos, cor e tamanho. Dá para trocar o tipo de um gráfico existente.
+- **Novos tipos:** funil, cascata, treemap, combinado (barras + linha), bolhas, barras 100% empilhadas, agrupadas, linhas por série, lista de nomes, tabela personalizada (várias colunas e listas de valores) e nota/comentário. KPI aceita qualquer campo e meta.
+- **Arquitetura:** `widget-schema.js` (catálogo declarativo de tipos) + `editor.js` (editor único). Para criar um tipo novo, acrescente uma entrada em `SDSchema.TYPES` e, se precisar de um cálculo novo, um ramo em `dashboard-engine.js` / `render.js`.
+- O layout salvo agora guarda a especificação completa de cada visualização.

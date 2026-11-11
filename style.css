@@ -278,3 +278,33 @@ body.nochat .results{padding-bottom:40px}
 .capture:fullscreen .cap-head h2{font-size:34px}
 @media (max-width:1100px){.strat{grid-template-columns:repeat(2,1fr)}}
 @media (max-width:700px){.strat{grid-template-columns:1fr}.pillars{grid-template-columns:1fr}.btn.toggle span{display:none}}
+
+/* ===== v4: editor de visualizações, tabelas, listas, treemap, notas ===== */
+dialog.wide{width:min(640px,96vw)}
+.ed-h{display:flex;justify-content:space-between;align-items:center;padding:18px 22px 6px}.ed-h h2{margin:0;font-family:var(--display);font-size:19px}
+.ed-b{padding:6px 22px 4px;max-height:calc(100vh - 220px);overflow:auto}
+.ed .dlg-f{padding:12px 22px 18px;margin:0;border-top:1px solid var(--line)}
+.ed .fld{margin-top:12px}.ed .fld select,.ed .fld input[type=text],.ed .fld textarea{width:100%}
+.ed textarea{border:1px solid var(--line);background:var(--card);border-radius:12px;padding:8px 10px;font:inherit;color:var(--text);resize:vertical}
+.ed .rows{display:flex;flex-direction:column;gap:6px}
+.er{display:flex;gap:6px;align-items:center}.er select,.er input[type=text],.er input[type=date]{flex:1;min-width:0;font-size:13px;padding:6px 8px}
+.wv{flex:1;position:relative}.wv summary{border:1px solid var(--line);border-radius:12px;padding:6px 10px;font-size:13px;cursor:pointer;background:var(--card);list-style:none}
+.wv .fmenu{position:absolute;z-index:5;left:0;right:0;top:calc(100% + 4px)}
+.ed-size{margin-top:14px;border-top:1px solid var(--line);padding-top:10px}.ed-size summary{cursor:pointer;font-weight:600;font-size:13px}
+.ed-err{color:#b3261e;font-size:13px;min-height:18px;margin:10px 0 0}
+.ed #edHint{margin:6px 0 0}
+/* tabelas e listas */
+.lv{overflow:auto}
+.tbl .lst{white-space:normal;min-width:220px;max-width:520px;line-height:1.45}
+.tbl th.sticky{position:sticky;left:0;background:var(--card);z-index:1}
+.lchips{display:flex;flex-wrap:wrap;gap:6px}
+.lchip{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);background:var(--bg);border-radius:999px;padding:5px 12px;font-size:13px}
+.lchip b{color:var(--viz,var(--brand));font-variant-numeric:tabular-nums}
+.txt{white-space:pre-wrap;font-size:14px;line-height:1.6}
+/* kpi: lista e meta */
+.kpi-l{font-size:15px;font-weight:600;line-height:1.5;max-height:140px;overflow:auto}
+.goal{height:8px;border-radius:99px;background:var(--line);margin:10px 0 4px;overflow:hidden}.goal i{display:block;height:100%;background:var(--viz,var(--brand));border-radius:99px}
+/* treemap */
+.tm{position:relative;border-radius:12px;overflow:hidden}
+.tm-t{position:absolute;box-sizing:border-box;border:2px solid var(--card);padding:6px 8px;overflow:hidden;font-size:12px;line-height:1.3;display:flex;flex-direction:column;border-radius:6px}
+.tm-t b{font-weight:700;overflow:hidden;text-overflow:ellipsis}.tm-t span{opacity:.9;font-size:11px}
